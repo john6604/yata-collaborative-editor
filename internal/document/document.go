@@ -56,3 +56,9 @@ func NewDocument() *Document {
 
 	return &document
 }
+
+func (d *Document) generateElementID() *ID {
+	id := NewID(d.clientID, d.clock)
+	d.clock++
+	return id
+}
