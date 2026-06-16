@@ -2,6 +2,7 @@ package document
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 )
 
@@ -57,8 +58,78 @@ func NewDocument() *Document {
 	return &document
 }
 
+// Generate an ID for an element
 func (d *Document) generateElementID() *ID {
 	id := NewID(d.clientID, d.clock)
 	d.clock++
 	return id
+}
+
+// Finding visible position
+func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
+
+	if index > d.CharacterCounter || index < 0 {
+		return nil, nil, errors.New("Inexisting position to insert character.")
+	}
+
+	if index == 0 {
+		return d.Start, d.Start.Right, nil
+	}
+
+	current := d.Start.Right
+
+	visibleIndex := 0
+
+	for current != nil {
+		if !current.IsDeleted {
+			if visibleIndex == index {
+				return current.Left, current, nil
+			}
+			visibleIndex++
+		}
+		current = current.Right
+	}
+
+	return d.End.Left, d.End, nil
+}
+
+// Local insertion in the document
+func (d *Document) insertElement(index int, character byte) error {
+
+	elements := make(map[int]*Element)
+	previousElement := NewEmptyElement()
+	nextElement := NewEmptyElement()
+
+	if index > d.CharacterCounter {
+		return errors.New("Inexisting position to insert character.")
+	}
+
+	for k := range d.ElementsByID {
+		i := 0
+		if d.ElementsByID[k].IsDeleted == false {
+			elements[i] = d.ElementsByID[k]
+			i++
+		}
+	}
+
+	for k := range elements {
+		if k == index && k == 0 {
+			previousElement = d.Start
+			nextElement = elements[k+1]
+		} else if k == index && k+1 == -2 {
+			previousElement = elements[k-1]
+			nextElement = d.End
+		} else {
+			previousElement = elements[k-1]
+			nextElement = elements[k+1]
+		}
+	}
+
+	id := d.generateElementID()
+	insertedElement := NewElement(*id, previousElement, previousElement, nextElement, character)
+	d.ElementsByID[insertedElement.ElementID] = insertedElement
+
+	d.CharacterCounter++
+
+	return nil
 }
