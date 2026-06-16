@@ -96,37 +96,16 @@ func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
 // Local insertion in the document
 func (d *Document) insertElement(index int, character byte) error {
 
-	elements := make(map[int]*Element)
-	previousElement := NewEmptyElement()
-	nextElement := NewEmptyElement()
+	previousElement, nextElement, err := d.findVisiblePosition(index)
 
-	if index > d.CharacterCounter {
-		return errors.New("Inexisting position to insert character.")
-	}
-
-	for k := range d.ElementsByID {
-		i := 0
-		if d.ElementsByID[k].IsDeleted == false {
-			elements[i] = d.ElementsByID[k]
-			i++
-		}
-	}
-
-	for k := range elements {
-		if k == index && k == 0 {
-			previousElement = d.Start
-			nextElement = elements[k+1]
-		} else if k == index && k+1 == -2 {
-			previousElement = elements[k-1]
-			nextElement = d.End
-		} else {
-			previousElement = elements[k-1]
-			nextElement = elements[k+1]
-		}
+	if err != nil {
+		return err
 	}
 
 	id := d.generateElementID()
 	insertedElement := NewElement(*id, previousElement, previousElement, nextElement, character)
+	previousElement.Right = insertedElement
+	nextElement.Left = insertedElement
 	d.ElementsByID[insertedElement.ElementID] = insertedElement
 
 	d.CharacterCounter++
