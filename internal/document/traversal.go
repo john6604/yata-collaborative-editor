@@ -12,10 +12,6 @@ func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
 		return nil, nil, errors.New("Inexisting position to insert character.")
 	}
 
-	if index == 0 {
-		return d.Start, d.Start.Right, nil
-	}
-
 	current := d.Start.Right
 
 	visibleIndex := 0
@@ -38,10 +34,6 @@ func (d *Document) findVisibleElement(index int) (*Element, error) {
 
 	if index >= d.CharacterCounter || index < 0 {
 		return nil, errors.New("The character to delete does not exist.")
-	}
-
-	if index == 0 {
-		return d.Start.Right, nil
 	}
 
 	current := d.Start.Right
