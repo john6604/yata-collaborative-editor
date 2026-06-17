@@ -2,7 +2,6 @@ package document
 
 import (
 	"crypto/rand"
-	"errors"
 	"fmt"
 )
 
@@ -65,34 +64,6 @@ func (d *Document) generateElementID() *ID {
 	return id
 }
 
-// Function to find visible position (Insertion)
-func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
-
-	if index > d.CharacterCounter || index < 0 {
-		return nil, nil, errors.New("Inexisting position to insert character.")
-	}
-
-	if index == 0 {
-		return d.Start, d.Start.Right, nil
-	}
-
-	current := d.Start.Right
-
-	visibleIndex := 0
-
-	for current != nil {
-		if !current.IsDeleted {
-			if visibleIndex == index {
-				return current.Left, current, nil
-			}
-			visibleIndex++
-		}
-		current = current.Right
-	}
-
-	return d.End.Left, d.End, nil
-}
-
 // Function to insert locally in the document
 func (d *Document) insertElement(index int, character byte) error {
 
@@ -111,34 +82,6 @@ func (d *Document) insertElement(index int, character byte) error {
 	d.CharacterCounter++
 
 	return nil
-}
-
-// Function to find an element by its index (Deletion)
-func (d *Document) findVisibleElement(index int) (*Element, error) {
-
-	if index >= d.CharacterCounter || index < 0 {
-		return nil, errors.New("The character to delete does not exist.")
-	}
-
-	if index == 0 {
-		return d.Start.Right, nil
-	}
-
-	current := d.Start.Right
-
-	visiblePosition := 0
-
-	for current != nil {
-		if !current.IsDeleted {
-			if visiblePosition == index {
-				return current, nil
-			}
-			visiblePosition++
-		}
-		current = current.Right
-	}
-
-	return nil, errors.New("An unexpected error has occured.")
 }
 
 // Function to delete an element logically
