@@ -1,5 +1,6 @@
 package document
 
+// Definition of structure for Element
 type Element struct {
 	ElementID ID
 	Origin    *Element
@@ -9,6 +10,7 @@ type Element struct {
 	Content   byte
 }
 
+// Constructor function
 func NewElement(id ID, origin *Element, left *Element, right *Element, content byte) *Element {
 	element := Element{ElementID: id}
 	element.Origin = origin

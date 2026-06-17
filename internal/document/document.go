@@ -10,7 +10,7 @@ import (
 var startID = NewID("START", -1)
 var endID = NewID("END", -2)
 
-// Definition os structure
+// Definition of structure
 type Document struct {
 	Start            *Element
 	End              *Element
@@ -20,7 +20,7 @@ type Document struct {
 	clock            int
 }
 
-// Generate a random UUID
+// Function to generate a random UUID
 func generateUUID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
@@ -33,7 +33,7 @@ func generateUUID() string {
 	return uuid
 }
 
-// Generate a new document
+// Function to generate a new document
 func NewDocument() *Document {
 
 	//Document attributes defined
@@ -58,14 +58,14 @@ func NewDocument() *Document {
 	return &document
 }
 
-// Generate an ID for an element
+// Function to generate an ID for an element
 func (d *Document) generateElementID() *ID {
 	id := NewID(d.clientID, d.clock)
 	d.clock++
 	return id
 }
 
-// Finding visible position
+// Function to find visible position (Insertion)
 func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
 
 	if index > d.CharacterCounter || index < 0 {
@@ -93,7 +93,7 @@ func (d *Document) findVisiblePosition(index int) (*Element, *Element, error) {
 	return d.End.Left, d.End, nil
 }
 
-// Local insertion in the document
+// Function to insert locally in the document
 func (d *Document) insertElement(index int, character byte) error {
 
 	previousElement, nextElement, err := d.findVisiblePosition(index)
@@ -109,6 +109,49 @@ func (d *Document) insertElement(index int, character byte) error {
 	d.ElementsByID[insertedElement.ElementID] = insertedElement
 
 	d.CharacterCounter++
+
+	return nil
+}
+
+// Function to find an element by its index (Deletion)
+func (d *Document) findVisibleElement(index int) (*Element, error) {
+
+	if index >= d.CharacterCounter || index < 0 {
+		return nil, errors.New("The character to delete does not exist.")
+	}
+
+	if index == 0 {
+		return d.Start.Right, nil
+	}
+
+	current := d.Start.Right
+
+	visiblePosition := 0
+
+	for current != nil {
+		if !current.IsDeleted {
+			if visiblePosition == index {
+				return current, nil
+			}
+			visiblePosition++
+		}
+		current = current.Right
+	}
+
+	return nil, errors.New("An unexpected error has occured.")
+}
+
+// Function to delete an element logically
+func (d *Document) delete(index int) error {
+
+	element, err := d.findVisibleElement(index)
+
+	if err != nil {
+		return err
+	}
+
+	element.IsDeleted = true
+	d.CharacterCounter--
 
 	return nil
 }
