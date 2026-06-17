@@ -65,7 +65,7 @@ func (d *Document) generateElementID() *ID {
 }
 
 // Function to insert locally in the document
-func (d *Document) insertElement(index int, character byte) error {
+func (d *Document) InsertElement(index int, character byte) error {
 
 	previousElement, nextElement, err := d.findVisiblePosition(index)
 
@@ -85,7 +85,7 @@ func (d *Document) insertElement(index int, character byte) error {
 }
 
 // Function to delete an element logically
-func (d *Document) delete(index int) error {
+func (d *Document) Delete(index int) error {
 
 	element, err := d.findVisibleElement(index)
 
