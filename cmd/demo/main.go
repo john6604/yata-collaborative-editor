@@ -76,8 +76,38 @@ func main() {
 	fmt.Println("TEST 9")
 	err := doc.Delete(100)
 	fmt.Println(err)
-	err = doc.InsertElement(100, 'X')
+	err, _ = doc.InsertElement(100, 'X')
 	fmt.Println(err)
 	err = doc.Delete(-1)
 	fmt.Println(err)
+
+	//Test Concurrencia
+	fmt.Println("TEST CONCURRENCIA 1")
+	var StartID = document.ID{
+
+		ClientID: "START",
+
+		Clock: -1,
+	}
+	docA := document.NewDocument()
+	docB := document.NewDocument()
+	docC := document.NewDocument()
+
+	_, idA := docA.InsertElement(0, 'X')
+	_, idB := docB.InsertElement(0, 'Y')
+
+	//Propagation
+	docB.RemoteInsert(StartID, idA, 'X')
+	docC.RemoteInsert(StartID, idA, 'X')
+
+	docA.RemoteInsert(StartID, idB, 'Y')
+	docC.RemoteInsert(StartID, idB, 'Y')
+
+	//Visualization
+	fmt.Println("Replica A")
+	fmt.Println(docA)
+	fmt.Println("Replica B")
+	fmt.Println(docB)
+	fmt.Println("Replica C")
+	fmt.Println(docC)
 }

@@ -13,7 +13,7 @@ func insertText(t *testing.T, document *Document, text string) {
 		character := text[i]
 		index := document.VisibleLength()
 
-		if err := document.InsertElement(index, character); err != nil {
+		if err, _ := document.InsertElement(index, character); err != nil {
 			t.Fatalf(
 				"InsertElement(%d, %q) returned an unexpected error: %v",
 				index,
@@ -65,7 +65,7 @@ func TestInsertAtBeginning(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
 
-	if err := document.InsertElement(0, 'X'); err != nil {
+	if err, _ := document.InsertElement(0, 'X'); err != nil {
 		t.Fatalf("InsertElement(0, 'X') returned an unexpected error: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestInsertInMiddle(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
 
-	if err := document.InsertElement(2, 'Y'); err != nil {
+	if err, _ := document.InsertElement(2, 'Y'); err != nil {
 		t.Fatalf("InsertElement(2, 'Y') returned an unexpected error: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestInsertAfterTombstone(t *testing.T) {
 		)
 	}
 
-	if err := document.InsertElement(1, 'a'); err != nil {
+	if err, _ := document.InsertElement(1, 'a'); err != nil {
 		t.Fatalf("InsertElement(1, 'a') returned an unexpected error: %v", err)
 	}
 
@@ -211,7 +211,8 @@ func TestInvalidIndexes(t *testing.T) {
 		{
 			name: "insert with an out-of-range index",
 			operation: func(document *Document) error {
-				return document.InsertElement(100, 'X')
+				err, _ := document.InsertElement(100, 'X')
+				return err
 			},
 		},
 	}

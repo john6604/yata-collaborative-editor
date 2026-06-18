@@ -66,12 +66,12 @@ func (d *Document) generateElementID() *ID {
 }
 
 // Function to insert locally in the document
-func (d *Document) InsertElement(index int, character byte) error {
+func (d *Document) InsertElement(index int, character byte) (error, ID) {
 
 	previousElement, nextElement, err := d.findVisiblePosition(index)
 
 	if err != nil {
-		return err
+		return err, ID{}
 	}
 
 	id := d.generateElementID()
@@ -82,7 +82,7 @@ func (d *Document) InsertElement(index int, character byte) error {
 
 	d.CharacterCounter++
 
-	return nil
+	return nil, *id
 }
 
 // Function to insert remotely/concurrently in the document
