@@ -81,7 +81,7 @@ func main() {
 	err = doc.Delete(-1)
 	fmt.Println(err)
 
-	//Test Concurrencia
+	//Test Concurrencia 1
 	fmt.Println("TEST CONCURRENCIA 1")
 	var StartID = document.ID{
 
@@ -104,6 +104,20 @@ func main() {
 	docC.RemoteInsert(StartID, idB, 'Y')
 
 	//Visualization
+	fmt.Println("Replica A")
+	fmt.Println(docA)
+	fmt.Println("Replica B")
+	fmt.Println(docB)
+	fmt.Println("Replica C")
+	fmt.Println(docC)
+
+	// TODO: Resultados incoherentes
+	// Test Concurrencia 2
+	fmt.Println("TEST CONCURRENCIA 2")
+	docA.Delete(1)
+	docB.RemoteDelete(idA)
+	docC.RemoteDelete(idA)
+
 	fmt.Println("Replica A")
 	fmt.Println(docA)
 	fmt.Println("Replica B")
