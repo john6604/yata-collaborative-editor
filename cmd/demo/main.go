@@ -111,12 +111,18 @@ func main() {
 	fmt.Println("Replica C")
 	fmt.Println(docC)
 
-	// TODO: Resultados incoherentes
 	// Test Concurrencia 2
 	fmt.Println("TEST CONCURRENCIA 2")
-	fmt.Println(docA.PrintInternal())
-	docA.Delete(1)
-	fmt.Println(docA.PrintInternal())
+	docA = document.NewDocument()
+	docB = document.NewDocument()
+	docC = document.NewDocument()
+
+	_, idA = docA.InsertElement(0, 'X')
+
+	docB.RemoteInsert(StartID, idA, 'X')
+	docC.RemoteInsert(StartID, idA, 'X')
+
+	docA.Delete(0)
 	docB.RemoteDelete(idA)
 	docC.RemoteDelete(idA)
 
@@ -126,4 +132,50 @@ func main() {
 	fmt.Println(docB)
 	fmt.Println("Replica C")
 	fmt.Println(docC)
+
+	// Test Concurrencia 3
+
+	fmt.Println("TEST CONCURRENCIA 3")
+	docA = document.NewDocument()
+	docB = document.NewDocument()
+	docC = document.NewDocument()
+
+	_, idA = docA.InsertElement(0, 'X')
+
+	docB.RemoteInsert(StartID, idA, 'X')
+	docB.RemoteInsert(StartID, idA, 'X')
+
+	docA.Delete(0)
+
+	docB.RemoteDelete(idA)
+	docB.RemoteDelete(idA)
+
+	fmt.Println("Replica A")
+	fmt.Println(docA)
+	fmt.Println("Replica B")
+	fmt.Println(docB)
+
+	// Test Concurrencia 4
+
+	fmt.Println("TEST CONCURRENCIA 4")
+	docA = document.NewDocument()
+	docB = document.NewDocument()
+
+	_, idA1 := docA.InsertElement(0, 'A')
+	_, idA2 := docA.InsertElement(1, 'X')
+	_, idA3 := docA.InsertElement(2, 'P')
+	_, idA4 := docA.InsertElement(3, 'Y')
+
+	docB.RemoteInsert(StartID, idA1, 'A')
+	docB.RemoteInsert(StartID, idA2, 'X')
+	docB.RemoteInsert(StartID, idA3, 'P')
+	docB.RemoteInsert(StartID, idA4, 'Y')
+
+	_, idA5 := docA.InsertElement(1, 'W')
+	docB.RemoteInsert(StartID, idA5, 'W')
+
+	fmt.Println("Replica A")
+	fmt.Println(docA)
+	fmt.Println("Replica B")
+	fmt.Println(docB)
 }
