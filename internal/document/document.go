@@ -121,3 +121,22 @@ func (d *Document) Delete(index int) error {
 
 	return nil
 }
+
+// Function to delete an element remotely
+func (d *Document) RemoteDelete(elementID ID) error {
+
+	if d.ElementsByID[elementID] == nil {
+		return errors.New("The element does not exists.")
+	}
+
+	if d.ElementsByID[elementID].IsDeleted {
+		return nil
+	}
+
+	element := d.ElementsByID[elementID]
+	element.IsDeleted = true
+
+	d.CharacterCounter--
+
+	return nil
+}
