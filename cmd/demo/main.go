@@ -114,7 +114,9 @@ func main() {
 	// TODO: Resultados incoherentes
 	// Test Concurrencia 2
 	fmt.Println("TEST CONCURRENCIA 2")
+	fmt.Println(docA.PrintInternal())
 	docA.Delete(1)
+	fmt.Println(docA.PrintInternal())
 	docB.RemoteDelete(idA)
 	docC.RemoteDelete(idA)
 
