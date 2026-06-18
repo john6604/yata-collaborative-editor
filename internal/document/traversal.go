@@ -53,6 +53,62 @@ func (d *Document) findVisibleElement(index int) (*Element, error) {
 	return nil, errors.New("An unexpected error has occured.")
 }
 
+// Function to construct a list of conflicting elements
+func (d *Document) findConflicting(originID ID) []*Element {
+
+	origin := d.ElementsByID[originID]
+
+	var conflictingElements []*Element
+
+	current := origin.Right
+
+	for current != d.End {
+		if current.Origin != origin {
+			current = current.Right
+			continue
+		}
+
+		conflictingElements = append(conflictingElements, current)
+		current = current.Right
+	}
+
+	return conflictingElements
+}
+
+// Function to find the left and right nodes for remote/concurrent insertion
+func (d *Document) findInsetionPoint(originID ID, newID ID) (*Element, *Element) {
+
+	// Eventually modify according to the paper
+	origin := d.ElementsByID[originID]
+
+	left, right := origin, origin.Right
+
+	conflictingElements := d.findConflicting(originID)
+
+	for _, ops := range conflictingElements {
+
+		if ops.Right.Origin == ops {
+			continue
+		}
+
+		if ops.ElementID.Clock < newID.Clock {
+			left, right = ops, ops.Right
+		} else if ops.ElementID.Clock > newID.Clock {
+			right = ops
+			break
+		} else {
+			if ops.ElementID.ClientID < newID.ClientID {
+				left, right = ops, ops.Right
+			} else {
+				right = ops
+				break
+			}
+		}
+	}
+
+	return left, right
+}
+
 // Function to visualize the current content in the document
 func (d *Document) VisibleContent() string {
 

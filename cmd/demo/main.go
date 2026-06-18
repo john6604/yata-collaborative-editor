@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+
 	//Test 1
 	fmt.Println("TEST 1")
 	doc := document.NewDocument()

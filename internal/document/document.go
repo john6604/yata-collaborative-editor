@@ -2,6 +2,7 @@ package document
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 )
 
@@ -78,6 +79,28 @@ func (d *Document) InsertElement(index int, character byte) error {
 	previousElement.Right = insertedElement
 	nextElement.Left = insertedElement
 	d.ElementsByID[insertedElement.ElementID] = insertedElement
+
+	d.CharacterCounter++
+
+	return nil
+}
+
+// Function to insert remotely/concurrently in the document
+func (d *Document) RemoteInsert(originID ID, newID ID, content byte) error {
+
+	if d.ElementsByID[newID] != nil {
+		return errors.New("The value was already inserted.")
+	}
+
+	left, right := d.findInsetionPoint(originID, newID)
+	origin := d.ElementsByID[originID]
+
+	element := NewElement(newID, origin, left, right, content)
+
+	left.Right = element
+	right.Left = element
+
+	d.ElementsByID[newID] = element
 
 	d.CharacterCounter++
 
