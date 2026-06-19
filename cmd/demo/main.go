@@ -89,6 +89,12 @@ func main() {
 
 		Clock: -1,
 	}
+	var EndID = document.ID{
+
+		ClientID: "END",
+
+		Clock: -2,
+	}
 	docA := document.NewDocument()
 	docB := document.NewDocument()
 	docC := document.NewDocument()
@@ -97,11 +103,11 @@ func main() {
 	_, idB := docB.InsertElement(0, 'Y')
 
 	//Propagation
-	docB.RemoteInsert(StartID, idA, 'X')
-	docC.RemoteInsert(StartID, idA, 'X')
+	docB.RemoteInsert(idA, StartID, EndID, 'X')
+	docC.RemoteInsert(idA, StartID, EndID, 'X')
 
-	docA.RemoteInsert(StartID, idB, 'Y')
-	docC.RemoteInsert(StartID, idB, 'Y')
+	docA.RemoteInsert(idB, StartID, EndID, 'Y')
+	docC.RemoteInsert(idB, StartID, EndID, 'Y')
 
 	//Visualization
 	fmt.Println("Replica A")
@@ -119,8 +125,8 @@ func main() {
 
 	_, idA = docA.InsertElement(0, 'X')
 
-	docB.RemoteInsert(StartID, idA, 'X')
-	docC.RemoteInsert(StartID, idA, 'X')
+	docB.RemoteInsert(idA, StartID, EndID, 'X')
+	docC.RemoteInsert(idA, StartID, EndID, 'X')
 
 	docA.Delete(0)
 	docB.RemoteDelete(idA)
@@ -142,8 +148,8 @@ func main() {
 
 	_, idA = docA.InsertElement(0, 'X')
 
-	docB.RemoteInsert(StartID, idA, 'X')
-	docB.RemoteInsert(StartID, idA, 'X')
+	docB.RemoteInsert(idA, StartID, EndID, 'X')
+	docB.RemoteInsert(idA, StartID, EndID, 'X')
 
 	docA.Delete(0)
 
@@ -166,13 +172,13 @@ func main() {
 	_, idA3 := docA.InsertElement(2, 'P')
 	_, idA4 := docA.InsertElement(3, 'Y')
 
-	docB.RemoteInsert(StartID, idA1, 'A')
-	docB.RemoteInsert(StartID, idA2, 'X')
-	docB.RemoteInsert(StartID, idA3, 'P')
-	docB.RemoteInsert(StartID, idA4, 'Y')
+	docB.RemoteInsert(idA1, StartID, EndID, 'A')
+	docB.RemoteInsert(idA2, idA1, EndID, 'X')
+	docB.RemoteInsert(idA3, idA2, EndID, 'P')
+	docB.RemoteInsert(idA4, idA3, EndID, 'Y')
 
 	_, idA5 := docA.InsertElement(1, 'W')
-	docB.RemoteInsert(idA1, idA5, 'W')
+	docB.RemoteInsert(idA5, idA1, idA2, 'W')
 
 	fmt.Println("Replica A")
 	fmt.Println(docA)

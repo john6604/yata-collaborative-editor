@@ -86,13 +86,13 @@ func (d *Document) InsertElement(index int, character byte) (error, ID) {
 }
 
 // Function to insert remotely/concurrently in the document
-func (d *Document) RemoteInsert(originID ID, newID ID, content byte) error {
+func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte) error {
 
 	if d.ElementsByID[newID] != nil {
 		return errors.New("The value was already inserted.")
 	}
 
-	left, right := d.findInsetionPoint(originID, newID)
+	left, right := d.findInsetionPoint(originID, rightID, newID)
 	origin := d.ElementsByID[originID]
 
 	element := NewElement(newID, origin, left, right, content)

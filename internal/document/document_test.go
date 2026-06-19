@@ -265,6 +265,11 @@ func TestConcurrentConvergence(t *testing.T) {
 		Clock:    -1,
 	}
 
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
 	docA := NewDocument()
 	docB := NewDocument()
 	docC := NewDocument()
@@ -273,12 +278,12 @@ func TestConcurrentConvergence(t *testing.T) {
 	_, idB := docB.InsertElement(0, 'Y')
 
 	// Propagate A's operation to replicas B and C.
-	docB.RemoteInsert(startID, idA, 'X')
-	docC.RemoteInsert(startID, idA, 'X')
+	docB.RemoteInsert(idA, startID, endID, 'X')
+	docC.RemoteInsert(idA, startID, endID, 'X')
 
 	// Propagate B's operation to replicas A and C.
-	docA.RemoteInsert(startID, idB, 'Y')
-	docC.RemoteInsert(startID, idB, 'Y')
+	docA.RemoteInsert(idB, startID, endID, 'Y')
+	docC.RemoteInsert(idB, startID, endID, 'Y')
 
 	contentA := docA.VisibleContent()
 	contentB := docB.VisibleContent()
@@ -308,6 +313,11 @@ func TestRemoteDelete(t *testing.T) {
 		Clock:    -1,
 	}
 
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
 	docA := NewDocument()
 	docB := NewDocument()
 	docC := NewDocument()
@@ -315,8 +325,8 @@ func TestRemoteDelete(t *testing.T) {
 	_, idA := docA.InsertElement(0, 'X')
 
 	// Propagate the insertion to replicas B and C.
-	docB.RemoteInsert(startID, idA, 'X')
-	docC.RemoteInsert(startID, idA, 'X')
+	docB.RemoteInsert(idA, startID, endID, 'X')
+	docC.RemoteInsert(idA, startID, endID, 'X')
 
 	// Delete the element locally and propagate the deletion.
 	docA.Delete(0)
@@ -355,14 +365,19 @@ func TestRemoteOperationsAreIdempotent(t *testing.T) {
 		Clock:    -1,
 	}
 
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
 	docA := NewDocument()
 	docB := NewDocument()
 
 	_, idA := docA.InsertElement(0, 'X')
 
 	// Apply the same remote insertion twice.
-	docB.RemoteInsert(startID, idA, 'X')
-	docB.RemoteInsert(startID, idA, 'X')
+	docB.RemoteInsert(idA, startID, endID, 'X')
+	docB.RemoteInsert(idA, startID, endID, 'X')
 
 	docA.Delete(0)
 
@@ -395,6 +410,11 @@ func TestOriginConsistency(t *testing.T) {
 		Clock:    -1,
 	}
 
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
 	docA := NewDocument()
 	docB := NewDocument()
 
@@ -404,14 +424,14 @@ func TestOriginConsistency(t *testing.T) {
 	_, idA4 := docA.InsertElement(3, 'Y')
 
 	// Reproduce the original origin chain in replica B.
-	docB.RemoteInsert(startID, idA1, 'A')
-	docB.RemoteInsert(idA1, idA2, 'X')
-	docB.RemoteInsert(idA2, idA3, 'P')
-	docB.RemoteInsert(idA3, idA4, 'Y')
+	docB.RemoteInsert(idA1, startID, endID, 'A')
+	docB.RemoteInsert(idA2, idA1, endID, 'X')
+	docB.RemoteInsert(idA3, idA2, endID, 'P')
+	docB.RemoteInsert(idA4, idA3, endID, 'Y')
 
 	// Insert W after A in both replicas.
 	_, idA5 := docA.InsertElement(1, 'W')
-	docB.RemoteInsert(idA1, idA5, 'W')
+	docB.RemoteInsert(idA5, idA1, idA2, 'W')
 
 	contentA := docA.VisibleContent()
 	contentB := docB.VisibleContent()

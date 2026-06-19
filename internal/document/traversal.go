@@ -54,20 +54,16 @@ func (d *Document) findVisibleElement(index int) (*Element, error) {
 }
 
 // Function to construct a list of conflicting elements
-func (d *Document) findConflicting(originID ID) []*Element {
+func (d *Document) conflictZone(originID ID, rightID ID) []*Element {
 
 	origin := d.ElementsByID[originID]
+	right := d.ElementsByID[rightID]
 
 	var conflictingElements []*Element
 
 	current := origin.Right
 
-	for current != d.End {
-		if current.Origin != origin {
-			current = current.Right
-			continue
-		}
-
+	for current != right {
 		conflictingElements = append(conflictingElements, current)
 		current = current.Right
 	}
@@ -75,20 +71,38 @@ func (d *Document) findConflicting(originID ID) []*Element {
 	return conflictingElements
 }
 
+func (d *Document) isOriginAfter(insertOperation *Element, conflictiveOperation *Element) bool {
+
+	current := d.Start.Right
+
+	for current != d.End {
+		if insertOperation == current {
+			return false
+		}
+
+		if conflictiveOperation.Origin == current {
+			return true
+		}
+
+		current = current.Right
+	}
+	return false
+}
+
 // Function to find the left and right nodes for remote/concurrent insertion
-func (d *Document) findInsetionPoint(originID ID, newID ID) (*Element, *Element) {
+func (d *Document) findInsetionPoint(originID ID, rightID ID, newID ID) (*Element, *Element) {
 
 	// Eventually modify according to the paper
 	origin := d.ElementsByID[originID]
 
 	left, right := origin, origin.Right
 
-	conflictingElements := d.findConflicting(originID)
+	conflictingElements := d.conflictZone(originID, rightID)
 
 	for _, ops := range conflictingElements {
 
-		if ops.Right.Origin == ops {
-			continue
+		if d.isOriginAfter(origin, ops) {
+			break
 		}
 
 		if ops.ElementID.Clock < newID.Clock {
