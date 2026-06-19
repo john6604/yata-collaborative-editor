@@ -18,19 +18,8 @@ type Document struct {
 	CharacterCounter int
 	clientID         string
 	clock            int
-}
-
-// Function to generate a random UUID
-func generateUUID() string {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		return err.Error()
-	}
-
-	uuid := fmt.Sprintf("%x-%x-%x-%x-%x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-	return uuid
+	PendingInserts   map[ID]*PendingElement
+	PendingDeletes   map[ID]*PendingElement
 }
 
 // Function to generate a new document
@@ -41,6 +30,8 @@ func NewDocument() *Document {
 	start := NewElement(*startID, nil, nil, nil, '\x00')
 	end := NewElement(*endID, nil, nil, nil, '\x00')
 	document.ElementsByID = make(map[ID]*Element)
+	document.PendingInserts = make(map[ID]*PendingElement)
+	document.PendingDeletes = make(map[ID]*PendingElement)
 	document.CharacterCounter = 0
 	document.clientID = generateUUID()
 	document.clock = 0
@@ -56,6 +47,19 @@ func NewDocument() *Document {
 	document.ElementsByID[end.ElementID] = end
 
 	return &document
+}
+
+// Function to generate a random UUID
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return err.Error()
+	}
+
+	uuid := fmt.Sprintf("%x-%x-%x-%x-%x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return uuid
 }
 
 // Function to generate an ID for an element
@@ -85,12 +89,7 @@ func (d *Document) InsertElement(index int, character byte) (error, ID) {
 	return nil, *id
 }
 
-// Function to insert remotely/concurrently in the document
-func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte) error {
-
-	if d.ElementsByID[newID] != nil {
-		return errors.New("The value was already inserted.")
-	}
+func (d *Document) integrateInsert(newID ID, originID ID, rightID ID, content byte) {
 
 	left, right := d.findInsetionPoint(originID, rightID, newID)
 	origin := d.ElementsByID[originID]
@@ -103,6 +102,26 @@ func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte)
 	d.ElementsByID[newID] = element
 
 	d.CharacterCounter++
+
+}
+
+// Function to insert remotely/concurrently in the document
+func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte) error {
+
+	if d.ElementsByID[newID] != nil {
+		return errors.New("The value was already inserted.")
+	}
+
+	if d.ElementsByID[originID] == nil || d.ElementsByID[rightID] == nil {
+		d.PendingInserts[newID] = NewPending(newID, originID, rightID, content)
+		return errors.New("Pending value.")
+	}
+
+	d.integrateInsert(newID, originID, rightID, content)
+
+	d.processPendingDeletes()
+
+	d.processPending()
 
 	return nil
 }
@@ -122,21 +141,23 @@ func (d *Document) Delete(index int) error {
 	return nil
 }
 
-// Function to delete an element remotely
-func (d *Document) RemoteDelete(elementID ID) error {
-
-	if d.ElementsByID[elementID] == nil {
-		return errors.New("The element does not exists.")
-	}
-
-	if d.ElementsByID[elementID].IsDeleted {
-		return nil
-	}
+func (d *Document) integrateDeletion(elementID ID) {
 
 	element := d.ElementsByID[elementID]
 	element.IsDeleted = true
 
 	d.CharacterCounter--
+}
+
+// Function to delete an element remotely
+func (d *Document) RemoteDelete(elementID ID) error {
+
+	if d.ElementsByID[elementID] == nil {
+		d.PendingDeletes[elementID] = NewPending(elementID, ID{}, ID{}, '\x00')
+		return nil
+	}
+
+	d.integrateDeletion(elementID)
 
 	return nil
 }

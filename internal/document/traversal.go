@@ -189,3 +189,30 @@ func (d *Document) Traverse() []*Element {
 
 	return elements
 }
+
+func (d *Document) processPending() {
+	progress := true
+
+	for progress {
+
+		progress = false
+
+		for _, v := range d.PendingInserts {
+			if d.ElementsByID[v.originID] != nil && d.ElementsByID[v.rightID] != nil {
+				d.integrateInsert(v.newID, v.originID, v.rightID, v.content)
+				delete(d.PendingInserts, v.newID)
+				progress = true
+			}
+		}
+	}
+}
+
+func (d *Document) processPendingDeletes() {
+
+	for _, v := range d.PendingDeletes {
+		if d.ElementsByID[v.newID] != nil {
+			d.integrateDeletion(v.newID)
+			delete(d.PendingDeletes, v.newID)
+		}
+	}
+}
