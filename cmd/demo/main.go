@@ -172,7 +172,7 @@ func main() {
 	docB.RemoteInsert(StartID, idA4, 'Y')
 
 	_, idA5 := docA.InsertElement(1, 'W')
-	docB.RemoteInsert(StartID, idA5, 'W')
+	docB.RemoteInsert(idA1, idA5, 'W')
 
 	fmt.Println("Replica A")
 	fmt.Println(docA)

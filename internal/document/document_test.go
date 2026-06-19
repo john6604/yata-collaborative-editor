@@ -257,3 +257,181 @@ func TestInvalidIndexes(t *testing.T) {
 		})
 	}
 }
+
+// Concurrency Test: TestConcurrentConvergence verifies that all replicas converge to the same visible content after receiving concurrent insert operations.
+func TestConcurrentConvergence(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	docA := NewDocument()
+	docB := NewDocument()
+	docC := NewDocument()
+
+	_, idA := docA.InsertElement(0, 'X')
+	_, idB := docB.InsertElement(0, 'Y')
+
+	// Propagate A's operation to replicas B and C.
+	docB.RemoteInsert(startID, idA, 'X')
+	docC.RemoteInsert(startID, idA, 'X')
+
+	// Propagate B's operation to replicas A and C.
+	docA.RemoteInsert(startID, idB, 'Y')
+	docC.RemoteInsert(startID, idB, 'Y')
+
+	contentA := docA.VisibleContent()
+	contentB := docB.VisibleContent()
+	contentC := docC.VisibleContent()
+
+	if contentA != contentB {
+		t.Errorf(
+			"Replica A content = %q; replica B content = %q",
+			contentA,
+			contentB,
+		)
+	}
+
+	if contentB != contentC {
+		t.Errorf(
+			"Replica B content = %q; replica C content = %q",
+			contentB,
+			contentC,
+		)
+	}
+}
+
+// Concurrency Test: TestRemoteDelete verifies that a delete operation propagated to all replicas removes the element from their visible content.
+func TestRemoteDelete(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	docA := NewDocument()
+	docB := NewDocument()
+	docC := NewDocument()
+
+	_, idA := docA.InsertElement(0, 'X')
+
+	// Propagate the insertion to replicas B and C.
+	docB.RemoteInsert(startID, idA, 'X')
+	docC.RemoteInsert(startID, idA, 'X')
+
+	// Delete the element locally and propagate the deletion.
+	docA.Delete(0)
+	docB.RemoteDelete(idA)
+	docC.RemoteDelete(idA)
+
+	if got := docA.VisibleContent(); got != "" {
+		t.Errorf("Replica A VisibleContent() = %q; expected an empty string", got)
+	}
+
+	if got := docB.VisibleContent(); got != "" {
+		t.Errorf("Replica B VisibleContent() = %q; expected an empty string", got)
+	}
+
+	if got := docC.VisibleContent(); got != "" {
+		t.Errorf("Replica C VisibleContent() = %q; expected an empty string", got)
+	}
+
+	if got := docA.VisibleLength(); got != 0 {
+		t.Errorf("Replica A VisibleLength() = %d; expected 0", got)
+	}
+
+	if got := docB.VisibleLength(); got != 0 {
+		t.Errorf("Replica B VisibleLength() = %d; expected 0", got)
+	}
+
+	if got := docC.VisibleLength(); got != 0 {
+		t.Errorf("Replica C VisibleLength() = %d; expected 0", got)
+	}
+}
+
+// Concurrency Test: TestRemoteOperationsAreIdempotent verifies that applying the same remote insert and delete operations multiple times does not duplicate nodes or change the final visible state.
+func TestRemoteOperationsAreIdempotent(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	docA := NewDocument()
+	docB := NewDocument()
+
+	_, idA := docA.InsertElement(0, 'X')
+
+	// Apply the same remote insertion twice.
+	docB.RemoteInsert(startID, idA, 'X')
+	docB.RemoteInsert(startID, idA, 'X')
+
+	docA.Delete(0)
+
+	// Apply the same remote deletion twice.
+	docB.RemoteDelete(idA)
+	docB.RemoteDelete(idA)
+
+	if got := docB.VisibleContent(); got != "" {
+		t.Errorf("Replica B VisibleContent() = %q; expected an empty string", got)
+	}
+
+	if got := docB.VisibleLength(); got != 0 {
+		t.Errorf("Replica B VisibleLength() = %d; expected 0", got)
+	}
+
+	nodes := docB.Traverse()
+
+	if got := len(nodes); got != 3 {
+		t.Errorf(
+			"len(docB.Traverse()) = %d; expected 3 nodes: START, X(X), and END",
+			got,
+		)
+	}
+}
+
+// Concurrency Test: TestOriginConsistency verifies that remote insertions preserve the same visible order and internal origin structure as the source replica.
+func TestOriginConsistency(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	docA := NewDocument()
+	docB := NewDocument()
+
+	_, idA1 := docA.InsertElement(0, 'A')
+	_, idA2 := docA.InsertElement(1, 'X')
+	_, idA3 := docA.InsertElement(2, 'P')
+	_, idA4 := docA.InsertElement(3, 'Y')
+
+	// Reproduce the original origin chain in replica B.
+	docB.RemoteInsert(startID, idA1, 'A')
+	docB.RemoteInsert(idA1, idA2, 'X')
+	docB.RemoteInsert(idA2, idA3, 'P')
+	docB.RemoteInsert(idA3, idA4, 'Y')
+
+	// Insert W after A in both replicas.
+	_, idA5 := docA.InsertElement(1, 'W')
+	docB.RemoteInsert(idA1, idA5, 'W')
+
+	contentA := docA.VisibleContent()
+	contentB := docB.VisibleContent()
+
+	if contentA != contentB {
+		t.Errorf(
+			"Visible content did not converge: replica A = %q, replica B = %q",
+			contentA,
+			contentB,
+		)
+	}
+
+	internalA := docA.PrintInternal()
+	internalB := docB.PrintInternal()
+
+	if internalA != internalB {
+		t.Errorf(
+			"Internal origin structure differs:\nreplica A: %s\nreplica B: %s",
+			internalA,
+			internalB,
+		)
+	}
+}
