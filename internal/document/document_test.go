@@ -455,3 +455,433 @@ func TestOriginConsistency(t *testing.T) {
 		)
 	}
 }
+
+// Concurrency Test: InsertElementAndGetID inserts a local element and returns its generated ID.
+func insertElementAndGetID(
+	t *testing.T,
+	document *Document,
+	index int,
+	content byte,
+) ID {
+	t.Helper()
+
+	err, id := document.InsertElement(index, content)
+	if err != nil {
+		t.Fatalf(
+			"InsertElement(%d, %q) returned an unexpected error: %v",
+			index,
+			content,
+			err,
+		)
+	}
+
+	return id
+}
+
+// Concurrency Test: RemoteInsertOrFail applies a remote insert operation and fails the test when the operation returns an unexpected error.
+func remoteInsertOrFail(
+	t *testing.T,
+	document *Document,
+	newID ID,
+	originID ID,
+	rightID ID,
+	content byte,
+) {
+	t.Helper()
+
+	if err := document.RemoteInsert(newID, originID, rightID, content); err != nil {
+		t.Fatalf(
+			"RemoteInsert(%v, %v, %v, %q) returned an unexpected error: %v",
+			newID,
+			originID,
+			rightID,
+			content,
+			err,
+		)
+	}
+}
+
+// Concurrency Test: RemoteInsertPendingOrFail applies a remote insert operation that is expected to remain buffered until its dependencies arrive.
+func remoteInsertPendingOrFail(
+	t *testing.T,
+	document *Document,
+	newID ID,
+	originID ID,
+	rightID ID,
+	content byte,
+) {
+	t.Helper()
+
+	err := document.RemoteInsert(newID, originID, rightID, content)
+	if err == nil {
+		t.Fatalf(
+			"RemoteInsert(%v, %v, %v, %q) returned nil; expected %q",
+			newID,
+			originID,
+			rightID,
+			content,
+			"Pending value.",
+		)
+	}
+
+	if err.Error() != "Pending value." {
+		t.Fatalf(
+			"RemoteInsert(%v, %v, %v, %q) returned %v; expected %q",
+			newID,
+			originID,
+			rightID,
+			content,
+			err,
+			"Pending value.",
+		)
+	}
+}
+
+// Concurrency Test: RemoteDeleteOrFail applies a remote delete operation and fails the test when the operation returns an unexpected error.
+func remoteDeleteOrFail(
+	t *testing.T,
+	document *Document,
+	elementID ID,
+) {
+	t.Helper()
+
+	if err := document.RemoteDelete(elementID); err != nil {
+		t.Fatalf(
+			"RemoteDelete(%v) returned an unexpected error: %v",
+			elementID,
+			err,
+		)
+	}
+}
+
+// Concurrency Test: TestPendingInsertOutOfOrder verifies that an insert whose origin is missing remains pending and is automatically integrated when its origin arrives.
+func TestPendingInsertOutOfOrder(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
+	source := NewDocument()
+	target := NewDocument()
+
+	idA := insertElementAndGetID(t, source, 0, 'A')
+	idB := insertElementAndGetID(t, source, 1, 'B')
+
+	// B arrives before its origin A.
+	remoteInsertPendingOrFail(t, target, idB, idA, endID, 'B')
+
+	if got := len(target.PendingInserts); got != 1 {
+		t.Errorf(
+			"len(PendingInserts) = %d after receiving B; expected 1",
+			got,
+		)
+	}
+
+	if got := target.VisibleContent(); got != "" {
+		t.Errorf(
+			"VisibleContent() = %q before A arrives; expected an empty string",
+			got,
+		)
+	}
+
+	// A arrives and automatically unlocks B.
+	remoteInsertOrFail(t, target, idA, startID, endID, 'A')
+
+	if got := target.VisibleContent(); got != "AB" {
+		t.Errorf("VisibleContent() = %q; expected %q", got, "AB")
+	}
+
+	if got := len(target.PendingInserts); got != 0 {
+		t.Errorf(
+			"len(PendingInserts) = %d after processing A; expected 0",
+			got,
+		)
+	}
+}
+
+// Concurrency Test: TestLongPendingInsertChain verifies that processPending repeatedly resolves a long causal chain until no pending insert operations remain.
+func TestLongPendingInsertChain(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
+	source := NewDocument()
+	target := NewDocument()
+
+	idA := insertElementAndGetID(t, source, 0, 'A')
+	idB := insertElementAndGetID(t, source, 1, 'B')
+	idC := insertElementAndGetID(t, source, 2, 'C')
+
+	// C depends on B, which is not available yet.
+	remoteInsertPendingOrFail(t, target, idC, idB, endID, 'C')
+
+	// B depends on A, which is also not available yet.
+	remoteInsertPendingOrFail(t, target, idB, idA, endID, 'B')
+
+	if got := len(target.PendingInserts); got != 2 {
+		t.Errorf(
+			"len(PendingInserts) = %d before A arrives; expected 2",
+			got,
+		)
+	}
+
+	// A unlocks B, and B then unlocks C.
+	remoteInsertOrFail(t, target, idA, startID, endID, 'A')
+
+	if got := target.VisibleContent(); got != "ABC" {
+		t.Errorf("VisibleContent() = %q; expected %q", got, "ABC")
+	}
+
+	if got := target.VisibleLength(); got != 3 {
+		t.Errorf("VisibleLength() = %d; expected 3", got)
+	}
+
+	if got := len(target.PendingInserts); got != 0 {
+		t.Errorf(
+			"len(PendingInserts) = %d after processing the chain; expected 0",
+			got,
+		)
+	}
+}
+
+// Concurrency Test: TestDeleteBeforeInsert verifies that a delete received before its matching insert remains pending and is applied immediately when the element arrives.
+func TestDeleteBeforeInsert(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
+	source := NewDocument()
+	target := NewDocument()
+
+	idX := insertElementAndGetID(t, source, 0, 'X')
+
+	// The delete arrives before X exists in the target replica.
+	remoteDeleteOrFail(t, target, idX)
+
+	if got := len(target.PendingDeletes); got != 1 {
+		t.Errorf(
+			"len(PendingDeletes) = %d before X arrives; expected 1",
+			got,
+		)
+	}
+
+	// X arrives and must be tombstoned immediately.
+	remoteInsertOrFail(t, target, idX, startID, endID, 'X')
+
+	if got := target.VisibleContent(); got != "" {
+		t.Errorf("VisibleContent() = %q; expected an empty string", got)
+	}
+
+	if got := target.VisibleLength(); got != 0 {
+		t.Errorf("VisibleLength() = %d; expected 0", got)
+	}
+
+	if got := len(target.PendingDeletes); got != 0 {
+		t.Errorf(
+			"len(PendingDeletes) = %d after X arrives; expected 0",
+			got,
+		)
+	}
+
+	nodes := target.Traverse()
+
+	if got := len(nodes); got != 3 {
+		t.Errorf(
+			"len(Traverse()) = %d; expected 3 nodes: START, X(X), and END",
+			got,
+		)
+	}
+
+	if internal := target.PrintInternal(); !strings.Contains(internal, "X(X)") {
+		t.Errorf(
+			"PrintInternal() = %q; expected it to contain the X(X) tombstone",
+			internal,
+		)
+	}
+}
+
+// Concurrency Test: TestOutOfOrderInsertAndDelete verifies that pending inserts and pending deletes are processed correctly across a causal insertion chain.
+func TestOutOfOrderInsertAndDelete(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
+	source := NewDocument()
+	target := NewDocument()
+
+	idA := insertElementAndGetID(t, source, 0, 'A')
+	idB := insertElementAndGetID(t, source, 1, 'B')
+	idC := insertElementAndGetID(t, source, 2, 'C')
+
+	// Delete C before C exists.
+	remoteDeleteOrFail(t, target, idC)
+
+	// C arrives before B and must remain pending.
+	remoteInsertPendingOrFail(t, target, idC, idB, endID, 'C')
+
+	// B arrives before A and must also remain pending.
+	remoteInsertPendingOrFail(t, target, idB, idA, endID, 'B')
+
+	if got := len(target.PendingDeletes); got != 1 {
+		t.Errorf(
+			"len(PendingDeletes) = %d before A arrives; expected 1",
+			got,
+		)
+	}
+
+	if got := len(target.PendingInserts); got != 2 {
+		t.Errorf(
+			"len(PendingInserts) = %d before A arrives; expected 2",
+			got,
+		)
+	}
+
+	// A unlocks B, B unlocks C, and C receives its pending delete.
+	remoteInsertOrFail(t, target, idA, startID, endID, 'A')
+
+	if got := target.VisibleContent(); got != "AB" {
+		t.Errorf("VisibleContent() = %q; expected %q", got, "AB")
+	}
+
+	if got := target.VisibleLength(); got != 2 {
+		t.Errorf("VisibleLength() = %d; expected 2", got)
+	}
+
+	if got := len(target.PendingInserts); got != 0 {
+		t.Errorf(
+			"len(PendingInserts) = %d after processing the chain; expected 0",
+			got,
+		)
+	}
+
+	if got := len(target.PendingDeletes); got != 0 {
+		t.Errorf(
+			"len(PendingDeletes) = %d after processing the chain; expected 0",
+			got,
+		)
+	}
+
+	internal := target.PrintInternal()
+
+	if !strings.Contains(internal, "A -> B -> C(X)") {
+		t.Errorf(
+			"PrintInternal() = %q; expected it to contain %q",
+			internal,
+			"A -> B -> C(X)",
+		)
+	}
+}
+
+// Concurrency Test: TestConvergenceWithArbitraryDelivery verifies that replicas converge to the same visible and internal state despite receiving operations in different causal delivery orders.
+func TestConvergenceWithArbitraryDelivery(t *testing.T) {
+	startID := ID{
+		ClientID: "START",
+		Clock:    -1,
+	}
+
+	endID := ID{
+		ClientID: "END",
+		Clock:    -2,
+	}
+
+	docA := NewDocument()
+	docB := NewDocument()
+	docC := NewDocument()
+
+	idA := insertElementAndGetID(t, docA, 0, 'A')
+	idB := insertElementAndGetID(t, docA, 1, 'B')
+	idC := insertElementAndGetID(t, docA, 2, 'C')
+
+	// Replica B receives C, A, and B.
+	remoteInsertPendingOrFail(t, docB, idC, idB, endID, 'C')
+	remoteInsertOrFail(t, docB, idA, startID, endID, 'A')
+	remoteInsertOrFail(t, docB, idB, idA, endID, 'B')
+
+	// Replica C receives B, C, and A.
+	remoteInsertPendingOrFail(t, docC, idB, idA, endID, 'B')
+	remoteInsertPendingOrFail(t, docC, idC, idB, endID, 'C')
+	remoteInsertOrFail(t, docC, idA, startID, endID, 'A')
+
+	contentA := docA.VisibleContent()
+	contentB := docB.VisibleContent()
+	contentC := docC.VisibleContent()
+
+	if contentA != "ABC" {
+		t.Errorf("Replica A VisibleContent() = %q; expected %q", contentA, "ABC")
+	}
+
+	if contentA != contentB {
+		t.Errorf(
+			"Visible content did not converge: replica A = %q, replica B = %q",
+			contentA,
+			contentB,
+		)
+	}
+
+	if contentB != contentC {
+		t.Errorf(
+			"Visible content did not converge: replica B = %q, replica C = %q",
+			contentB,
+			contentC,
+		)
+	}
+
+	internalA := docA.PrintInternal()
+	internalB := docB.PrintInternal()
+	internalC := docC.PrintInternal()
+
+	if internalA != internalB {
+		t.Errorf(
+			"Internal state did not converge:\nreplica A: %s\nreplica B: %s",
+			internalA,
+			internalB,
+		)
+	}
+
+	if internalB != internalC {
+		t.Errorf(
+			"Internal state did not converge:\nreplica B: %s\nreplica C: %s",
+			internalB,
+			internalC,
+		)
+	}
+
+	if got := len(docB.PendingInserts); got != 0 {
+		t.Errorf("Replica B has %d pending inserts; expected 0", got)
+	}
+
+	if got := len(docC.PendingInserts); got != 0 {
+		t.Errorf("Replica C has %d pending inserts; expected 0", got)
+	}
+
+	if got := len(docB.PendingDeletes); got != 0 {
+		t.Errorf("Replica B has %d pending deletes; expected 0", got)
+	}
+
+	if got := len(docC.PendingDeletes); got != 0 {
+		t.Errorf("Replica C has %d pending deletes; expected 0", got)
+	}
+}

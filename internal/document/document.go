@@ -119,9 +119,9 @@ func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte)
 
 	d.integrateInsert(newID, originID, rightID, content)
 
-	d.processPendingDeletes()
-
 	d.processPending()
+
+	d.processPendingDeletes()
 
 	return nil
 }
@@ -154,6 +154,10 @@ func (d *Document) RemoteDelete(elementID ID) error {
 
 	if d.ElementsByID[elementID] == nil {
 		d.PendingDeletes[elementID] = NewPending(elementID, ID{}, ID{}, '\x00')
+		return nil
+	}
+
+	if d.ElementsByID[elementID].IsDeleted == true {
 		return nil
 	}
 
