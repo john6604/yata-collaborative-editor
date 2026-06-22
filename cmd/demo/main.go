@@ -1,5 +1,11 @@
 package main
 
+import (
+	"log"
+
+	"github.com/john6604/yata-collaborative-editor/internal/storage"
+)
+
 /*"fmt"
 
 "github.com/john6604/yata-collaborative-editor/internal/document"*/
@@ -182,4 +188,8 @@ func main() {
 		fmt.Println(docA)
 		fmt.Println("Replica B")
 		fmt.Println(docB)*/
+	s := &storage.Storage{}
+	if err := s.OpenDB(); err != nil {
+		log.Fatal(err)
+	}
 }
