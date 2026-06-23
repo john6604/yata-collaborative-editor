@@ -126,9 +126,9 @@ func formatID(clientID identifier.ID) string {
 
 func (s *Storage) SaveElements(document document.Document) error {
 
-	current := document.Start.Right
+	current := document.Start
 
-	for current != document.End {
+	for current != nil {
 
 		id := formatID(current.ElementID)
 		elementID := []byte(id)

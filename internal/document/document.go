@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
-	"github.com/john6604/yata-collaborative-editor/internal/persistence"
 )
 
 // Package variables for Start and End nodes
@@ -50,13 +49,6 @@ func NewDocument() *Document {
 	document.ElementsByID[end.ElementID] = end
 
 	return &document
-}
-
-type listConstructor interface {
-	LoadMetadata() (*persistence.PersistedMetadata, error)
-	LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*Element, error)
-	RebuildRelations(persistedElements map[identifier.ID]*persistence.PersistedElement, elementsByIds map[identifier.ID]*Element) (error, map[identifier.ID]*Element)
-	ConstructStartEnd() (*Element, *Element)
 }
 
 // Function to generate a random UUID

@@ -7,6 +7,11 @@ import (
 	"github.com/john6604/yata-collaborative-editor/internal/persistence"
 )
 
+type ListConstructor interface {
+	LoadMetadata() (*persistence.PersistedMetadata, error)
+	LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*Element, error)
+}
+
 func RebuildRelations(persistedElements map[identifier.ID]*persistence.PersistedElement, elementsBydIds map[identifier.ID]*Element) (error, map[identifier.ID]*Element) {
 
 	for k := range elementsBydIds {
@@ -14,15 +19,15 @@ func RebuildRelations(persistedElements map[identifier.ID]*persistence.Persisted
 		if persisted == nil {
 			return errors.New("No existing key."), nil
 		}
-		if elementsBydIds[identifier.ID(persisted.OriginID)] == nil {
+		if elementsBydIds[identifier.ID(persisted.OriginID)] == nil && (elementsBydIds[identifier.ID(persisted.OriginID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.OriginID)].ElementID.ClientID != "END") {
 			return errors.New("No existing key."), nil
 		}
 		elementsBydIds[k].Origin = elementsBydIds[identifier.ID(persisted.OriginID)]
-		if elementsBydIds[identifier.ID(persisted.LeftID)] == nil {
+		if elementsBydIds[identifier.ID(persisted.LeftID)] == nil && (elementsBydIds[identifier.ID(persisted.LeftID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.LeftID)].ElementID.ClientID != "END") {
 			return errors.New("No existing key."), nil
 		}
 		elementsBydIds[k].Left = elementsBydIds[identifier.ID(persisted.LeftID)]
-		if elementsBydIds[identifier.ID(persisted.RightID)] == nil {
+		if elementsBydIds[identifier.ID(persisted.RightID)] == nil && (elementsBydIds[identifier.ID(persisted.RightID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.RightID)].ElementID.ClientID != "END") {
 			return errors.New("No existing key."), nil
 		}
 		elementsBydIds[k].Right = elementsBydIds[identifier.ID(persisted.RightID)]
@@ -30,13 +35,39 @@ func RebuildRelations(persistedElements map[identifier.ID]*persistence.Persisted
 
 	return nil, elementsBydIds
 }
+func (d *Document) ReconstructDocument(constructor ListConstructor) error {
 
-func ConstructStartEnd() (*Element, *Element) {
-	start := identifier.NewID("START", -1)
-	end := identifier.NewID("END", -2)
+	// Collect Data
+	metadata, err := constructor.LoadMetadata()
 
-	startElement := NewElement(*start, nil, nil, nil, '\x00')
-	endElement := NewElement(*end, nil, nil, nil, '\x00')
+	if err != nil {
+		return err
+	}
 
-	return startElement, endElement
+	persistedElements, elements, err2 := constructor.LoadElements()
+
+	if err2 != nil {
+		return err2
+	}
+
+	err3, elementsByIds := RebuildRelations(persistedElements, elements)
+
+	if err3 != nil {
+		return err3
+	}
+
+	// Set data
+	d.Start = elementsByIds[identifier.ID{ClientID: "START", Clock: -1}]
+	d.End = elementsByIds[identifier.ID{ClientID: "END", Clock: -2}]
+	d.ClientID = metadata.ClientID
+	d.Clock = metadata.Clock
+	d.CharacterCounter = metadata.CharacterCounter
+
+	d.ElementsByID = elementsByIds
+
+	if d.Start == nil || d.End == nil {
+		return errors.New("Start or End are null value.")
+	}
+
+	return nil
 }
