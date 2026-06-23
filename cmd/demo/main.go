@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"path/filepath"
 
 	"github.com/john6604/yata-collaborative-editor/internal/storage"
 )
@@ -189,7 +190,10 @@ func main() {
 		fmt.Println("Replica B")
 		fmt.Println(docB)*/
 	s := &storage.Storage{}
-	if err := s.OpenDB(); err != nil {
+
+	path := filepath.Join("..", "..", "data", "yata.db")
+
+	if err := s.OpenDB(path); err != nil {
 		log.Fatal(err)
 	}
 }

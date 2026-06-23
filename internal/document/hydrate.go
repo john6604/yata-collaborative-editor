@@ -19,22 +19,29 @@ func RebuildRelations(persistedElements map[identifier.ID]*persistence.Persisted
 		if persisted == nil {
 			return errors.New("No existing key."), nil
 		}
-		if elementsBydIds[identifier.ID(persisted.OriginID)] == nil && (elementsBydIds[identifier.ID(persisted.OriginID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.OriginID)].ElementID.ClientID != "END") {
-			return errors.New("No existing key."), nil
+		if k.ClientID == "START" || k.ClientID == "END" {
+			elementsBydIds[k].Origin = nil
+			elementsBydIds[k].Left = elementsBydIds[identifier.ID(persisted.LeftID)]
+			elementsBydIds[k].Right = elementsBydIds[identifier.ID(persisted.RightID)]
+		} else {
+			if elementsBydIds[identifier.ID(persisted.OriginID)] == nil {
+				return errors.New("No existing key."), nil
+			}
+			elementsBydIds[k].Origin = elementsBydIds[identifier.ID(persisted.OriginID)]
+			if elementsBydIds[identifier.ID(persisted.LeftID)] == nil {
+				return errors.New("No existing key."), nil
+			}
+			elementsBydIds[k].Left = elementsBydIds[identifier.ID(persisted.LeftID)]
+			if elementsBydIds[identifier.ID(persisted.RightID)] == nil {
+				return errors.New("No existing key."), nil
+			}
+			elementsBydIds[k].Right = elementsBydIds[identifier.ID(persisted.RightID)]
 		}
-		elementsBydIds[k].Origin = elementsBydIds[identifier.ID(persisted.OriginID)]
-		if elementsBydIds[identifier.ID(persisted.LeftID)] == nil && (elementsBydIds[identifier.ID(persisted.LeftID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.LeftID)].ElementID.ClientID != "END") {
-			return errors.New("No existing key."), nil
-		}
-		elementsBydIds[k].Left = elementsBydIds[identifier.ID(persisted.LeftID)]
-		if elementsBydIds[identifier.ID(persisted.RightID)] == nil && (elementsBydIds[identifier.ID(persisted.RightID)].ElementID.ClientID != "START" && elementsBydIds[identifier.ID(persisted.RightID)].ElementID.ClientID != "END") {
-			return errors.New("No existing key."), nil
-		}
-		elementsBydIds[k].Right = elementsBydIds[identifier.ID(persisted.RightID)]
 	}
 
 	return nil, elementsBydIds
 }
+
 func (d *Document) ReconstructDocument(constructor ListConstructor) error {
 
 	// Collect Data

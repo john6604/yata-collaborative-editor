@@ -15,8 +15,8 @@ type Storage struct {
 	db *bolt.DB
 }
 
-func (s *Storage) OpenDB() error {
-	db, err := bolt.Open("..\\..\\internal\\storage\\yata.db", 0o600, &bolt.Options{Timeout: 2 * time.Second})
+func (s *Storage) OpenDB(path string) error {
+	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 2 * time.Second})
 
 	if err != nil {
 		return err
@@ -126,42 +126,43 @@ func formatID(clientID identifier.ID) string {
 
 func (s *Storage) SaveElements(document document.Document) error {
 
-	current := document.Start
+	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
 
-	for current != nil {
+		bucket := tx.Bucket([]byte("elements"))
 
-		id := formatID(current.ElementID)
-		elementID := []byte(id)
-
-		persistedElement := ToPersistedElement(current)
-
-		data, err := json.Marshal(persistedElement)
-
-		if err != nil {
-			return err
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
 		}
 
-		errTransaction := s.db.Update(func(tx *bolt.Tx) error {
-			bucket := tx.Bucket([]byte("elements"))
+		current := document.Start
 
-			if bucket == nil {
-				return fmt.Errorf("No bucket assigned.")
-			}
+		for current != nil {
 
-			err := bucket.Put(elementID, data)
+			id := formatID(current.ElementID)
+			elementID := []byte(id)
+
+			persistedElement := ToPersistedElement(current)
+
+			data, err := json.Marshal(persistedElement)
 
 			if err != nil {
 				return err
 			}
 
-			return nil
-		})
+			err1 := bucket.Put(elementID, data)
 
-		if errTransaction != nil {
-			return errTransaction
+			if err1 != nil {
+				return err1
+			}
+
+			current = current.Right
 		}
 
-		current = current.Right
+		return nil
+	})
+
+	if errTransaction != nil {
+		return errTransaction
 	}
 
 	return nil
