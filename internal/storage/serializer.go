@@ -35,3 +35,20 @@ func ToElement(persistedElement PersistedElement) document.Element {
 
 	return *element
 }
+
+func ToPersistedMetadata(document *document.Document) PersistedMetadata {
+	persistedMetadata := PersistedMetadata{ClientID: document.ClientID}
+	persistedMetadata.Clock = document.Clock
+	persistedMetadata.CharacterCounter = document.CharacterCounter
+
+	return persistedMetadata
+}
+
+func ToMetadata(persistedMetadata PersistedMetadata) document.Document {
+	document := document.NewDocument()
+	document.ClientID = persistedMetadata.ClientID
+	document.CharacterCounter = persistedMetadata.CharacterCounter
+	document.Clock = persistedMetadata.Clock
+
+	return *document
+}

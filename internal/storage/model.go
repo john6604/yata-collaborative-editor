@@ -14,7 +14,7 @@ type PersistedElement struct {
 }
 
 type PersistedMetadata struct {
-	ClientID         document.ID
+	ClientID         string
 	Clock            int
 	CharacterCounter int
 }

@@ -16,8 +16,8 @@ type Document struct {
 	End              *Element
 	ElementsByID     map[ID]*Element
 	CharacterCounter int
-	clientID         string
-	clock            int
+	ClientID         string
+	Clock            int
 	PendingInserts   map[ID]*PendingElement
 	PendingDeletes   map[ID]*PendingElement
 }
@@ -33,8 +33,8 @@ func NewDocument() *Document {
 	document.PendingInserts = make(map[ID]*PendingElement)
 	document.PendingDeletes = make(map[ID]*PendingElement)
 	document.CharacterCounter = 0
-	document.clientID = generateUUID()
-	document.clock = 0
+	document.ClientID = generateUUID()
+	document.Clock = 0
 
 	//Initial logic defined
 	start.Right = end
@@ -64,8 +64,8 @@ func generateUUID() string {
 
 // Function to generate an ID for an element
 func (d *Document) generateElementID() *ID {
-	id := NewID(d.clientID, d.clock)
-	d.clock++
+	id := NewID(d.ClientID, d.Clock)
+	d.Clock++
 	return id
 }
 
