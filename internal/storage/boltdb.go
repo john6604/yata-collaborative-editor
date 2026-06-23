@@ -117,3 +117,93 @@ func (s *Storage) LoadMetadata() (*PersistedMetadata, error) {
 
 	return &persistedMetadata, nil
 }
+
+func formatID(clientID document.ID) string {
+	return "(" + clientID.ClientID + "," + fmt.Sprint(clientID.Clock) + ")"
+}
+
+func (s *Storage) SaveElements(document document.Document) error {
+
+	current := document.Start.Right
+
+	for current != document.End {
+
+		id := formatID(current.ElementID)
+		elementID := []byte(id)
+
+		persistedElement := ToPersistedElement(current)
+
+		data, err := json.Marshal(persistedElement)
+
+		if err != nil {
+			return err
+		}
+
+		errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("elements"))
+
+			if bucket == nil {
+				return fmt.Errorf("No bucket assigned.")
+			}
+
+			err := bucket.Put(elementID, data)
+
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if errTransaction != nil {
+			return errTransaction
+		}
+
+		current = current.Right
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadElements() (map[document.ID]*document.Element, error) {
+
+	elementByIDs := make(map[document.ID]*document.Element)
+
+	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("elements"))
+
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
+		}
+
+		err := bucket.ForEach(func(k, v []byte) error {
+
+			var persistedElement PersistedElement
+
+			err := json.Unmarshal(v, &persistedElement)
+
+			if err != nil {
+				return err
+			}
+
+			element := ToElement(persistedElement)
+
+			elementByIDs[element.ElementID] = &element
+
+			return nil
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if errTransaction != nil {
+		return nil, errTransaction
+	}
+
+	return elementByIDs, nil
+
+}
