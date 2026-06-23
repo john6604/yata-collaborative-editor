@@ -3,6 +3,8 @@ package document
 import (
 	"strings"
 	"testing"
+
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 )
 
 // Test: insertText inserts all bytes from the given text at the end of the document.
@@ -260,12 +262,12 @@ func TestInvalidIndexes(t *testing.T) {
 
 // Concurrency Test: TestConcurrentConvergence verifies that all replicas converge to the same visible content after receiving concurrent insert operations.
 func TestConcurrentConvergence(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -308,12 +310,12 @@ func TestConcurrentConvergence(t *testing.T) {
 
 // Concurrency Test: TestRemoteDelete verifies that a delete operation propagated to all replicas removes the element from their visible content.
 func TestRemoteDelete(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -360,12 +362,12 @@ func TestRemoteDelete(t *testing.T) {
 
 // Concurrency Test: TestRemoteOperationsAreIdempotent verifies that applying the same remote insert and delete operations multiple times does not duplicate nodes or change the final visible state.
 func TestRemoteOperationsAreIdempotent(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -405,12 +407,12 @@ func TestRemoteOperationsAreIdempotent(t *testing.T) {
 
 // Concurrency Test: TestOriginConsistency verifies that remote insertions preserve the same visible order and internal origin structure as the source replica.
 func TestOriginConsistency(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -456,13 +458,13 @@ func TestOriginConsistency(t *testing.T) {
 	}
 }
 
-// Concurrency Test: InsertElementAndGetID inserts a local element and returns its generated ID.
+// Concurrency Test: InsertElementAndGetID inserts a local element and returns its generated identifier.ID.
 func insertElementAndGetID(
 	t *testing.T,
 	document *Document,
 	index int,
 	content byte,
-) ID {
+) identifier.ID {
 	t.Helper()
 
 	err, id := document.InsertElement(index, content)
@@ -482,9 +484,9 @@ func insertElementAndGetID(
 func remoteInsertOrFail(
 	t *testing.T,
 	document *Document,
-	newID ID,
-	originID ID,
-	rightID ID,
+	newID identifier.ID,
+	originID identifier.ID,
+	rightID identifier.ID,
 	content byte,
 ) {
 	t.Helper()
@@ -505,9 +507,9 @@ func remoteInsertOrFail(
 func remoteInsertPendingOrFail(
 	t *testing.T,
 	document *Document,
-	newID ID,
-	originID ID,
-	rightID ID,
+	newID identifier.ID,
+	originID identifier.ID,
+	rightID identifier.ID,
 	content byte,
 ) {
 	t.Helper()
@@ -541,7 +543,7 @@ func remoteInsertPendingOrFail(
 func remoteDeleteOrFail(
 	t *testing.T,
 	document *Document,
-	elementID ID,
+	elementID identifier.ID,
 ) {
 	t.Helper()
 
@@ -556,12 +558,12 @@ func remoteDeleteOrFail(
 
 // Concurrency Test: TestPendingInsertOutOfOrder verifies that an insert whose origin is missing remains pending and is automatically integrated when its origin arrives.
 func TestPendingInsertOutOfOrder(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -606,12 +608,12 @@ func TestPendingInsertOutOfOrder(t *testing.T) {
 
 // Concurrency Test: TestLongPendingInsertChain verifies that processPending repeatedly resolves a long causal chain until no pending insert operations remain.
 func TestLongPendingInsertChain(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -657,12 +659,12 @@ func TestLongPendingInsertChain(t *testing.T) {
 
 // Concurrency Test: TestDeleteBeforeInsert verifies that a delete received before its matching insert remains pending and is applied immediately when the element arrives.
 func TestDeleteBeforeInsert(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -719,12 +721,12 @@ func TestDeleteBeforeInsert(t *testing.T) {
 
 // Concurrency Test: TestOutOfOrderInsertAndDelete verifies that pending inserts and pending deletes are processed correctly across a causal insertion chain.
 func TestOutOfOrderInsertAndDelete(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}
@@ -797,12 +799,12 @@ func TestOutOfOrderInsertAndDelete(t *testing.T) {
 
 // Concurrency Test: TestConvergenceWithArbitraryDelivery verifies that replicas converge to the same visible and internal state despite receiving operations in different causal delivery orders.
 func TestConvergenceWithArbitraryDelivery(t *testing.T) {
-	startID := ID{
+	startID := identifier.ID{
 		ClientID: "START",
 		Clock:    -1,
 	}
 
-	endID := ID{
+	endID := identifier.ID{
 		ClientID: "END",
 		Clock:    -2,
 	}

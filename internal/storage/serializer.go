@@ -2,49 +2,51 @@ package storage
 
 import (
 	"github.com/john6604/yata-collaborative-editor/internal/document"
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/persistence"
 )
 
-func ToPersistedElement(element *document.Element) PersistedElement {
-	persistedElement := PersistedElement{ElementID: element.ElementID}
+func ToPersistedElement(element *document.Element) persistence.PersistedElement {
+	persistedElement := persistence.PersistedElement{ElementID: identifier.ID(element.ElementID)}
 	persistedElement.Content = element.Content
 	persistedElement.IsDeleted = element.IsDeleted
 	if element.Origin != nil {
-		persistedElement.OriginID = element.Origin.ElementID
+		persistedElement.OriginID = identifier.ID(element.Origin.ElementID)
 	} else {
-		persistedElement.OriginID = document.ID{}
+		persistedElement.OriginID = identifier.ID{}
 	}
 
 	if element.Left != nil {
-		persistedElement.LeftID = element.Left.ElementID
+		persistedElement.LeftID = identifier.ID(element.Left.ElementID)
 	} else {
-		persistedElement.LeftID = document.ID{}
+		persistedElement.LeftID = identifier.ID{}
 	}
 
 	if element.Right != nil {
-		persistedElement.RightID = element.Right.ElementID
+		persistedElement.RightID = identifier.ID(element.Right.ElementID)
 	} else {
-		persistedElement.RightID = document.ID{}
+		persistedElement.RightID = identifier.ID{}
 	}
 
 	return persistedElement
 }
 
-func ToElement(persistedElement PersistedElement) document.Element {
-	element := document.NewElement(persistedElement.ElementID, nil, nil, nil, persistedElement.Content)
+func ToElement(persistedElement persistence.PersistedElement) document.Element {
+	element := document.NewElement(identifier.ID(persistedElement.ElementID), nil, nil, nil, persistedElement.Content)
 	element.IsDeleted = persistedElement.IsDeleted
 
 	return *element
 }
 
-func ToPersistedMetadata(document *document.Document) PersistedMetadata {
-	persistedMetadata := PersistedMetadata{ClientID: document.ClientID}
+func ToPersistedMetadata(document *document.Document) persistence.PersistedMetadata {
+	persistedMetadata := persistence.PersistedMetadata{ClientID: document.ClientID}
 	persistedMetadata.Clock = document.Clock
 	persistedMetadata.CharacterCounter = document.CharacterCounter
 
 	return persistedMetadata
 }
 
-func ToMetadata(persistedMetadata PersistedMetadata) document.Document {
+func ToMetadata(persistedMetadata persistence.PersistedMetadata) document.Document {
 	document := document.NewDocument()
 	document.ClientID = persistedMetadata.ClientID
 	document.CharacterCounter = persistedMetadata.CharacterCounter

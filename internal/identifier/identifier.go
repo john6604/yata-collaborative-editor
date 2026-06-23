@@ -1,4 +1,4 @@
-package document
+package identifier
 
 // Definition of structur for internal ID
 type ID struct {

@@ -3,6 +3,8 @@ package document
 import (
 	"errors"
 	"strings"
+
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 )
 
 // Function to find visible position (Insertion)
@@ -54,7 +56,7 @@ func (d *Document) findVisibleElement(index int) (*Element, error) {
 }
 
 // Function to construct a list of conflicting elements
-func (d *Document) conflictZone(originID ID, rightID ID) []*Element {
+func (d *Document) conflictZone(originID identifier.ID, rightID identifier.ID) []*Element {
 
 	origin := d.ElementsByID[originID]
 	right := d.ElementsByID[rightID]
@@ -90,7 +92,7 @@ func (d *Document) isOriginAfter(insertOperation *Element, conflictiveOperation 
 }
 
 // Function to find the left and right nodes for remote/concurrent insertion
-func (d *Document) findInsetionPoint(originID ID, rightID ID, newID ID) (*Element, *Element) {
+func (d *Document) findInsetionPoint(originID identifier.ID, rightID identifier.ID, newID identifier.ID) (*Element, *Element) {
 
 	// Eventually modify according to the paper
 	origin := d.ElementsByID[originID]

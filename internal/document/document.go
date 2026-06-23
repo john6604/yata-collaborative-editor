@@ -4,22 +4,25 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/persistence"
 )
 
 // Package variables for Start and End nodes
-var startID = NewID("START", -1)
-var endID = NewID("END", -2)
+var startID = identifier.NewID("START", -1)
+var endID = identifier.NewID("END", -2)
 
 // Definition of structure
 type Document struct {
 	Start            *Element
 	End              *Element
-	ElementsByID     map[ID]*Element
+	ElementsByID     map[identifier.ID]*Element
 	CharacterCounter int
 	ClientID         string
 	Clock            int
-	PendingInserts   map[ID]*PendingElement
-	PendingDeletes   map[ID]*PendingElement
+	PendingInserts   map[identifier.ID]*PendingElement
+	PendingDeletes   map[identifier.ID]*PendingElement
 }
 
 // Function to generate a new document
@@ -29,9 +32,9 @@ func NewDocument() *Document {
 	document := Document{CharacterCounter: 0}
 	start := NewElement(*startID, nil, nil, nil, '\x00')
 	end := NewElement(*endID, nil, nil, nil, '\x00')
-	document.ElementsByID = make(map[ID]*Element)
-	document.PendingInserts = make(map[ID]*PendingElement)
-	document.PendingDeletes = make(map[ID]*PendingElement)
+	document.ElementsByID = make(map[identifier.ID]*Element)
+	document.PendingInserts = make(map[identifier.ID]*PendingElement)
+	document.PendingDeletes = make(map[identifier.ID]*PendingElement)
 	document.CharacterCounter = 0
 	document.ClientID = generateUUID()
 	document.Clock = 0
@@ -49,6 +52,13 @@ func NewDocument() *Document {
 	return &document
 }
 
+type listConstructor interface {
+	LoadMetadata() (*persistence.PersistedMetadata, error)
+	LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*Element, error)
+	RebuildRelations(persistedElements map[identifier.ID]*persistence.PersistedElement, elementsByIds map[identifier.ID]*Element) (error, map[identifier.ID]*Element)
+	ConstructStartEnd() (*Element, *Element)
+}
+
 // Function to generate a random UUID
 func generateUUID() string {
 	b := make([]byte, 16)
@@ -63,19 +73,19 @@ func generateUUID() string {
 }
 
 // Function to generate an ID for an element
-func (d *Document) generateElementID() *ID {
-	id := NewID(d.ClientID, d.Clock)
+func (d *Document) generateElementID() *identifier.ID {
+	id := identifier.NewID(d.ClientID, d.Clock)
 	d.Clock++
 	return id
 }
 
 // Function to insert locally in the document
-func (d *Document) InsertElement(index int, character byte) (error, ID) {
+func (d *Document) InsertElement(index int, character byte) (error, identifier.ID) {
 
 	previousElement, nextElement, err := d.findVisiblePosition(index)
 
 	if err != nil {
-		return err, ID{}
+		return err, identifier.ID{}
 	}
 
 	id := d.generateElementID()
@@ -89,7 +99,7 @@ func (d *Document) InsertElement(index int, character byte) (error, ID) {
 	return nil, *id
 }
 
-func (d *Document) integrateInsert(newID ID, originID ID, rightID ID, content byte) {
+func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content byte) {
 
 	left, right := d.findInsetionPoint(originID, rightID, newID)
 	origin := d.ElementsByID[originID]
@@ -106,7 +116,7 @@ func (d *Document) integrateInsert(newID ID, originID ID, rightID ID, content by
 }
 
 // Function to insert remotely/concurrently in the document
-func (d *Document) RemoteInsert(newID ID, originID ID, rightID ID, content byte) error {
+func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content byte) error {
 
 	if d.ElementsByID[newID] != nil {
 		return errors.New("The value was already inserted.")
@@ -141,7 +151,7 @@ func (d *Document) Delete(index int) error {
 	return nil
 }
 
-func (d *Document) integrateDeletion(elementID ID) {
+func (d *Document) integrateDeletion(elementID identifier.ID) {
 
 	element := d.ElementsByID[elementID]
 	element.IsDeleted = true
@@ -150,10 +160,10 @@ func (d *Document) integrateDeletion(elementID ID) {
 }
 
 // Function to delete an element remotely
-func (d *Document) RemoteDelete(elementID ID) error {
+func (d *Document) RemoteDelete(elementID identifier.ID) error {
 
 	if d.ElementsByID[elementID] == nil {
-		d.PendingDeletes[elementID] = NewPending(elementID, ID{}, ID{}, '\x00')
+		d.PendingDeletes[elementID] = NewPending(elementID, identifier.ID{}, identifier.ID{}, '\x00')
 		return nil
 	}
 

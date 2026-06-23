@@ -2,11 +2,12 @@ package storage
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/john6604/yata-collaborative-editor/internal/document"
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/persistence"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -86,9 +87,9 @@ func (s *Storage) SaveMetadata(document *document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadMetadata() (*PersistedMetadata, error) {
+func (s *Storage) LoadMetadata() (*persistence.PersistedMetadata, error) {
 
-	var persistedMetadata PersistedMetadata
+	var persistedMetadata persistence.PersistedMetadata
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("metadata"))
@@ -119,7 +120,7 @@ func (s *Storage) LoadMetadata() (*PersistedMetadata, error) {
 	return &persistedMetadata, nil
 }
 
-func formatID(clientID document.ID) string {
+func formatID(clientID identifier.ID) string {
 	return "(" + clientID.ClientID + "," + fmt.Sprint(clientID.Clock) + ")"
 }
 
@@ -166,10 +167,10 @@ func (s *Storage) SaveElements(document document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadElements() (map[document.ID]*PersistedElement, map[document.ID]*document.Element, error) {
+func (s *Storage) LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, error) {
 
-	elementByIDs := make(map[document.ID]*document.Element)
-	elementsPersisted := make(map[document.ID]*PersistedElement)
+	elementByIDs := make(map[identifier.ID]*document.Element)
+	elementsPersisted := make(map[identifier.ID]*persistence.PersistedElement)
 
 	errTransaction := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("elements"))
@@ -180,7 +181,7 @@ func (s *Storage) LoadElements() (map[document.ID]*PersistedElement, map[documen
 
 		err := bucket.ForEach(func(k, v []byte) error {
 
-			var persistedElement PersistedElement
+			var persistedElement persistence.PersistedElement
 
 			err := json.Unmarshal(v, &persistedElement)
 
@@ -188,7 +189,7 @@ func (s *Storage) LoadElements() (map[document.ID]*PersistedElement, map[documen
 				return err
 			}
 
-			elementsPersisted[persistedElement.ElementID] = &persistedElement
+			elementsPersisted[identifier.ID(persistedElement.ElementID)] = &persistedElement
 
 			element := ToElement(persistedElement)
 
@@ -210,38 +211,4 @@ func (s *Storage) LoadElements() (map[document.ID]*PersistedElement, map[documen
 
 	return elementsPersisted, elementByIDs, nil
 
-}
-
-func RebuildRelations(persistedElements map[document.ID]*PersistedElement, elementsBydIds map[document.ID]*document.Element) (error, map[document.ID]*document.Element) {
-
-	for k := range elementsBydIds {
-		persisted := persistedElements[k]
-		if persisted == nil {
-			return errors.New("No existing key."), nil
-		}
-		if elementsBydIds[persisted.OriginID] == nil {
-			return errors.New("No existing key."), nil
-		}
-		elementsBydIds[k].Origin = elementsBydIds[persisted.OriginID]
-		if elementsBydIds[persisted.LeftID] == nil {
-			return errors.New("No existing key."), nil
-		}
-		elementsBydIds[k].Left = elementsBydIds[persisted.LeftID]
-		if elementsBydIds[persisted.RightID] == nil {
-			return errors.New("No existing key."), nil
-		}
-		elementsBydIds[k].Right = elementsBydIds[persisted.RightID]
-	}
-
-	return nil, elementsBydIds
-}
-
-func ConstructStartEnd() (*document.Element, *document.Element) {
-	start := document.NewID("Start", -1)
-	end := document.NewID("End", -2)
-
-	startElement := document.NewElement(*start, nil, nil, nil, '\x00')
-	endElement := document.NewElement(*end, nil, nil, nil, '\x00')
-
-	return startElement, endElement
 }

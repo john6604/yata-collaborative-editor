@@ -1,8 +1,10 @@
 package document
 
+import "github.com/john6604/yata-collaborative-editor/internal/identifier"
+
 // Definition of structure for Element
 type Element struct {
-	ElementID ID
+	ElementID identifier.ID
 	Origin    *Element
 	Left      *Element
 	Right     *Element
@@ -11,7 +13,7 @@ type Element struct {
 }
 
 // Constructor function
-func NewElement(id ID, origin *Element, left *Element, right *Element, content byte) *Element {
+func NewElement(id identifier.ID, origin *Element, left *Element, right *Element, content byte) *Element {
 	element := Element{ElementID: id}
 	element.Origin = origin
 	element.Left = left

@@ -1,13 +1,15 @@
 package document
 
+import "github.com/john6604/yata-collaborative-editor/internal/identifier"
+
 type PendingElement struct {
-	newID    ID
-	originID ID
-	rightID  ID
+	newID    identifier.ID
+	originID identifier.ID
+	rightID  identifier.ID
 	content  byte
 }
 
-func NewPending(id ID, origin ID, right ID, content byte) *PendingElement {
+func NewPending(id identifier.ID, origin identifier.ID, right identifier.ID, content byte) *PendingElement {
 	pending := PendingElement{newID: id}
 	pending.originID = origin
 	pending.rightID = right
