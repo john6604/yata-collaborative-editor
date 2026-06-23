@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -165,9 +166,10 @@ func (s *Storage) SaveElements(document document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadElements() (map[document.ID]*document.Element, error) {
+func (s *Storage) LoadElements() (map[document.ID]*PersistedElement, map[document.ID]*document.Element, error) {
 
 	elementByIDs := make(map[document.ID]*document.Element)
+	elementsPersisted := make(map[document.ID]*PersistedElement)
 
 	errTransaction := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("elements"))
@@ -186,6 +188,8 @@ func (s *Storage) LoadElements() (map[document.ID]*document.Element, error) {
 				return err
 			}
 
+			elementsPersisted[persistedElement.ElementID] = &persistedElement
+
 			element := ToElement(persistedElement)
 
 			elementByIDs[element.ElementID] = &element
@@ -201,9 +205,43 @@ func (s *Storage) LoadElements() (map[document.ID]*document.Element, error) {
 	})
 
 	if errTransaction != nil {
-		return nil, errTransaction
+		return nil, nil, errTransaction
 	}
 
-	return elementByIDs, nil
+	return elementsPersisted, elementByIDs, nil
 
+}
+
+func RebuildRelations(persistedElements map[document.ID]*PersistedElement, elementsBydIds map[document.ID]*document.Element) (error, map[document.ID]*document.Element) {
+
+	for k := range elementsBydIds {
+		persisted := persistedElements[k]
+		if persisted == nil {
+			return errors.New("No existing key."), nil
+		}
+		if elementsBydIds[persisted.OriginID] == nil {
+			return errors.New("No existing key."), nil
+		}
+		elementsBydIds[k].Origin = elementsBydIds[persisted.OriginID]
+		if elementsBydIds[persisted.LeftID] == nil {
+			return errors.New("No existing key."), nil
+		}
+		elementsBydIds[k].Left = elementsBydIds[persisted.LeftID]
+		if elementsBydIds[persisted.RightID] == nil {
+			return errors.New("No existing key."), nil
+		}
+		elementsBydIds[k].Right = elementsBydIds[persisted.RightID]
+	}
+
+	return nil, elementsBydIds
+}
+
+func ConstructStartEnd() (*document.Element, *document.Element) {
+	start := document.NewID("Start", -1)
+	end := document.NewID("End", -2)
+
+	startElement := document.NewElement(*start, nil, nil, nil, '\x00')
+	endElement := document.NewElement(*end, nil, nil, nil, '\x00')
+
+	return startElement, endElement
 }
