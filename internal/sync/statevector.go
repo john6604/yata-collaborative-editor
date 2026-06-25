@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/john6604/yata-collaborative-editor/internal/document"
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 )
 
 type Vector struct {
@@ -72,4 +73,37 @@ func (v *Vector) GenerateDeleteSet(deletes document.Document) {
 	sortElements := sortClocks(v.DeleteSet)
 
 	v.DeleteSet = sortElements
+}
+
+func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.ID, []identifier.ID) {
+
+	missingInserts := []identifier.ID{}
+	missingDeletes := []identifier.ID{}
+
+	insertsKnown := vector.StateVectors
+	deletesKnown := vector.DeleteSet
+
+	for k, v := range localDocument.ElementsByID {
+
+		clientID := k.ClientID
+		clock := k.Clock
+
+		id := identifier.NewID(clientID, clock)
+
+		if clientID == "START" || clientID == "END" {
+			continue
+		}
+
+		value, exists := insertsKnown[clientID]
+
+		if !exists {
+			missingInserts[*id] = document.NewPending(*id, v.Origin.ElementID, v.Right.ElementID, v.Content)
+		} else {
+			if insertsKnown[clientID] < clock {
+				missingInserts[*id] = 
+			}
+		}
+	}
+
+	return missingInserts, missingDeletes
 }
