@@ -12,6 +12,20 @@ type Vector struct {
 	DeleteSet    map[string][]int
 }
 
+func validateClockContinuity(document document.Document, idClient string, maxClock int) bool {
+
+	for i := 0; i <= maxClock; i++ {
+		id := identifier.NewID(idClient, i)
+		_, exists := document.ElementsByID[*id]
+
+		if !exists {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (v *Vector) GenerateStateVector(elements document.Document) {
 
 	for k := range elements.ElementsByID {
@@ -25,10 +39,15 @@ func (v *Vector) GenerateStateVector(elements document.Document) {
 
 		value, exists := v.StateVectors[clientID]
 
+		if !validateClockContinuity(elements, clientID, clock) {
+			continue
+		}
+
 		if !exists {
 			v.StateVectors[clientID] = clock
 		} else {
 			if clock > value {
+
 				v.StateVectors[clientID] = clock
 			}
 		}
@@ -75,6 +94,16 @@ func (v *Vector) GenerateDeleteSet(deletes document.Document) {
 	v.DeleteSet = sortElements
 }
 
+func deleteExists(knownDeletes []int, clock int) bool {
+	for _, delete := range knownDeletes {
+		if delete == clock {
+			return true
+		}
+	}
+
+	return false
+}
+
 func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.ID, []identifier.ID) {
 
 	missingInserts := []identifier.ID{}
@@ -83,12 +112,10 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 	insertsKnown := vector.StateVectors
 	deletesKnown := vector.DeleteSet
 
-	for k, v := range localDocument.ElementsByID {
+	for k := range localDocument.ElementsByID {
 
 		clientID := k.ClientID
 		clock := k.Clock
-
-		id := identifier.NewID(clientID, clock)
 
 		if clientID == "START" || clientID == "END" {
 			continue
@@ -97,10 +124,54 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 		value, exists := insertsKnown[clientID]
 
 		if !exists {
-			missingInserts[*id] = document.NewPending(*id, v.Origin.ElementID, v.Right.ElementID, v.Content)
+			missingInserts = append(missingInserts, k)
 		} else {
-			if insertsKnown[clientID] < clock {
-				missingInserts[*id] = 
+			if clock > value {
+				missingInserts = append(missingInserts, k)
+			}
+		}
+	}
+
+	for k, v := range localDocument.ElementsByID {
+
+		clientID := k.ClientID
+		clock := k.Clock
+
+		if clientID == "START" || clientID == "END" {
+			continue
+		}
+
+		if !v.IsDeleted {
+			continue
+		}
+
+		value, exists := deletesKnown[clientID]
+
+		if !exists {
+			missingDeletes = append(missingDeletes, k)
+		} else {
+			if !deleteExists(value, clock) {
+				missingDeletes = append(missingDeletes, k)
+			}
+		}
+	}
+
+	for k := range localDocument.PendingDeletes {
+
+		clientID := k.ClientID
+		clock := k.Clock
+
+		if clientID == "START" || clientID == "END" {
+			continue
+		}
+
+		value, exists := deletesKnown[clientID]
+
+		if !exists {
+			missingDeletes = append(missingDeletes, k)
+		} else {
+			if !deleteExists(value, clock) {
+				missingDeletes = append(missingDeletes, k)
 			}
 		}
 	}
