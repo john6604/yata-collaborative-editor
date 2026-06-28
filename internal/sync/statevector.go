@@ -112,26 +112,6 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 	insertsKnown := vector.StateVectors
 	deletesKnown := vector.DeleteSet
 
-	for k := range localDocument.ElementsByID {
-
-		clientID := k.ClientID
-		clock := k.Clock
-
-		if clientID == "START" || clientID == "END" {
-			continue
-		}
-
-		value, exists := insertsKnown[clientID]
-
-		if !exists {
-			missingInserts = append(missingInserts, k)
-		} else {
-			if clock > value {
-				missingInserts = append(missingInserts, k)
-			}
-		}
-	}
-
 	for k, v := range localDocument.ElementsByID {
 
 		clientID := k.ClientID
@@ -141,17 +121,24 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 			continue
 		}
 
-		if !v.IsDeleted {
-			continue
-		}
-
-		value, exists := deletesKnown[clientID]
+		value, exists := insertsKnown[clientID]
+		value1, exists1 := deletesKnown[clientID]
 
 		if !exists {
-			missingDeletes = append(missingDeletes, k)
+			missingInserts = append(missingInserts, k)
 		} else {
-			if !deleteExists(value, clock) {
+			if clock > value {
+				missingInserts = append(missingInserts, k)
+			}
+		}
+
+		if v.IsDeleted {
+			if !exists1 {
 				missingDeletes = append(missingDeletes, k)
+			} else {
+				if !deleteExists(value1, clock) {
+					missingDeletes = append(missingDeletes, k)
+				}
 			}
 		}
 	}
