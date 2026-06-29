@@ -16,3 +16,14 @@ type PersistedMetadata struct {
 	Clock            int
 	CharacterCounter int
 }
+
+type PersistedInsertOperation struct {
+	NewID    identifier.ID
+	OriginID identifier.ID
+	RightID  identifier.ID
+	Content  byte
+}
+
+type PersistedDeleteOperation struct {
+	TargetID identifier.ID
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 	"github.com/john6604/yata-collaborative-editor/internal/persistence"
+	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -34,6 +35,16 @@ func (s *Storage) OpenDB(path string) error {
 		_, err2 := tx.CreateBucketIfNotExists([]byte("elements"))
 		if err2 != nil {
 			return fmt.Errorf("create bucket: %s", err2)
+		}
+
+		_, err3 := tx.CreateBucketIfNotExists([]byte("insert_log"))
+		if err3 != nil {
+			return fmt.Errorf("create bucket: %s", err3)
+		}
+
+		_, err4 := tx.CreateBucketIfNotExists([]byte("delete_log"))
+		if err4 != nil {
+			return fmt.Errorf("create bucket: %s", err4)
 		}
 
 		return nil
@@ -212,4 +223,175 @@ func (s *Storage) LoadElements() (map[identifier.ID]*persistence.PersistedElemen
 
 	return elementsPersisted, elementByIDs, nil
 
+}
+
+func (s *Storage) SaveInsertOperations(document document.Document) error {
+
+	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte("insert_log"))
+
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
+		}
+
+		inserts := document.InsertLog
+
+		for k, v := range inserts {
+
+			id := formatID(k)
+			newID := []byte(id)
+
+			persistedInsert := ToPersistedInsertOperation(v)
+
+			data, err := json.Marshal(persistedInsert)
+
+			if err != nil {
+				return err
+			}
+
+			err1 := bucket.Put(newID, data)
+
+			if err1 != nil {
+				return err1
+			}
+		}
+
+		return nil
+	})
+
+	if errTransaction != nil {
+		return errTransaction
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadInsertOperations() (map[identifier.ID]*protocol.InsertOperation, error) {
+
+	insertLog := make(map[identifier.ID]*protocol.InsertOperation)
+
+	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte("insert_log"))
+
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
+		}
+
+		err := bucket.ForEach(func(k, v []byte) error {
+
+			var persistedInsert persistence.PersistedInsertOperation
+
+			err := json.Unmarshal(v, &persistedInsert)
+
+			if err != nil {
+				return err
+			}
+
+			insert := ToInsertOperation(persistedInsert)
+
+			insertLog[insert.NewID] = &insert
+
+			return nil
+
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if errTransaction != nil {
+		return nil, errTransaction
+	}
+
+	return insertLog, nil
+}
+
+func (s *Storage) SaveDeleteOperations(document document.Document) error {
+
+	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte("delete_log"))
+
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
+		}
+
+		deletes := document.DeleteLog
+
+		for k, v := range deletes {
+
+			id := formatID(k)
+			targetID := []byte(id)
+
+			persistedDelete := ToPersistedDeleteOperation(v)
+
+			data, err := json.Marshal(persistedDelete)
+
+			if err != nil {
+				return err
+			}
+
+			err1 := bucket.Put(targetID, data)
+
+			if err1 != nil {
+				return err1
+			}
+		}
+
+		return nil
+	})
+
+	if errTransaction != nil {
+		return errTransaction
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadDeleteOperations() (map[identifier.ID]*protocol.DeleteOperation, error) {
+
+	deleteLog := make(map[identifier.ID]*protocol.DeleteOperation)
+
+	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte("delete_log"))
+
+		if bucket == nil {
+			return fmt.Errorf("No bucket assigned.")
+		}
+
+		err := bucket.ForEach(func(k, v []byte) error {
+
+			var persistedDelete persistence.PersistedDeleteOperation
+
+			err := json.Unmarshal(v, &persistedDelete)
+
+			if err != nil {
+				return err
+			}
+
+			delete := ToDeleteOperation(persistedDelete)
+
+			deleteLog[delete.TargetID] = &delete
+
+			return nil
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if errTransaction != nil {
+		return nil, errTransaction
+	}
+
+	return deleteLog, nil
 }

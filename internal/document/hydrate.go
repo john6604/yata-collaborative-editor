@@ -5,11 +5,14 @@ import (
 
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 	"github.com/john6604/yata-collaborative-editor/internal/persistence"
+	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 )
 
 type ListConstructor interface {
 	LoadMetadata() (*persistence.PersistedMetadata, error)
 	LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*Element, error)
+	LoadInsertOperations() (map[identifier.ID]*protocol.InsertOperation, error)
+	LoadDeleteOperations() (map[identifier.ID]*protocol.DeleteOperation, error)
 }
 
 func RebuildRelations(persistedElements map[identifier.ID]*persistence.PersistedElement, elementsBydIds map[identifier.ID]*Element) (error, map[identifier.ID]*Element) {
@@ -63,6 +66,18 @@ func (d *Document) ReconstructDocument(constructor ListConstructor) error {
 		return err3
 	}
 
+	insertLog, err4 := constructor.LoadInsertOperations()
+
+	if err4 != nil {
+		return err4
+	}
+
+	deleteLog, err5 := constructor.LoadDeleteOperations()
+
+	if err5 != nil {
+		return err5
+	}
+
 	// Set data
 	d.Start = elementsByIds[identifier.ID{ClientID: "START", Clock: -1}]
 	d.End = elementsByIds[identifier.ID{ClientID: "END", Clock: -2}]
@@ -71,6 +86,9 @@ func (d *Document) ReconstructDocument(constructor ListConstructor) error {
 	d.CharacterCounter = metadata.CharacterCounter
 
 	d.ElementsByID = elementsByIds
+
+	d.InsertLog = insertLog
+	d.DeleteLog = deleteLog
 
 	if d.Start == nil || d.End == nil {
 		return errors.New("Start or End are null value.")
