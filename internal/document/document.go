@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 )
 
 // Package variables for Start and End nodes
@@ -22,8 +23,8 @@ type Document struct {
 	Clock            int
 	PendingInserts   map[identifier.ID]*PendingElement
 	PendingDeletes   map[identifier.ID]*PendingElement
-	InsertLog        map[identifier.ID]*InsertOperation
-	DeleteLog        map[identifier.ID]*DeleteOperation
+	InsertLog        map[identifier.ID]*protocol.InsertOperation
+	DeleteLog        map[identifier.ID]*protocol.DeleteOperation
 }
 
 // Function to generate a new document
@@ -36,8 +37,8 @@ func NewDocument() *Document {
 	document.ElementsByID = make(map[identifier.ID]*Element)
 	document.PendingInserts = make(map[identifier.ID]*PendingElement)
 	document.PendingDeletes = make(map[identifier.ID]*PendingElement)
-	document.InsertLog = make(map[identifier.ID]*InsertOperation)
-	document.DeleteLog = make(map[identifier.ID]*DeleteOperation)
+	document.InsertLog = make(map[identifier.ID]*protocol.InsertOperation)
+	document.DeleteLog = make(map[identifier.ID]*protocol.DeleteOperation)
 	document.CharacterCounter = 0
 	document.ClientID = generateUUID()
 	document.Clock = 0
@@ -89,7 +90,7 @@ func (d *Document) InsertElement(index int, character byte) (error, identifier.I
 	previousElement.Right = insertedElement
 	nextElement.Left = insertedElement
 	d.ElementsByID[insertedElement.ElementID] = insertedElement
-	insertOperation := NewInsertOperation(insertedElement.ElementID, previousElement.ElementID, nextElement.ElementID, character)
+	insertOperation := protocol.NewInsertOperation(insertedElement.ElementID, previousElement.ElementID, nextElement.ElementID, character)
 	d.InsertLog[insertedElement.ElementID] = insertOperation
 
 	d.CharacterCounter++
@@ -108,7 +109,7 @@ func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, 
 	right.Left = element
 
 	d.ElementsByID[newID] = element
-	insertOperation := NewInsertOperation(newID, originID, rightID, content)
+	insertOperation := protocol.NewInsertOperation(newID, originID, rightID, content)
 	d.InsertLog[newID] = insertOperation
 
 	d.CharacterCounter++
@@ -124,7 +125,7 @@ func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rig
 
 	if d.ElementsByID[originID] == nil || d.ElementsByID[rightID] == nil {
 		d.PendingInserts[newID] = NewPending(newID, originID, rightID, content)
-		insertOperation := NewInsertOperation(newID, originID, rightID, content)
+		insertOperation := protocol.NewInsertOperation(newID, originID, rightID, content)
 		d.InsertLog[newID] = insertOperation
 		return errors.New("Pending value.")
 	}
@@ -149,7 +150,7 @@ func (d *Document) Delete(index int) error {
 
 	element.IsDeleted = true
 	d.CharacterCounter--
-	deleteOperation := NewDeleteOperation(element.ElementID)
+	deleteOperation := protocol.NewDeleteOperation(element.ElementID)
 	d.DeleteLog[element.ElementID] = deleteOperation
 
 	return nil
@@ -162,7 +163,7 @@ func (d *Document) integrateDeletion(elementID identifier.ID) {
 
 	d.CharacterCounter--
 
-	deleteOperation := NewDeleteOperation(element.ElementID)
+	deleteOperation := protocol.NewDeleteOperation(element.ElementID)
 	d.DeleteLog[element.ElementID] = deleteOperation
 }
 
@@ -171,7 +172,7 @@ func (d *Document) RemoteDelete(elementID identifier.ID) error {
 
 	if d.ElementsByID[elementID] == nil {
 		d.PendingDeletes[elementID] = NewPending(elementID, identifier.ID{}, identifier.ID{}, '\x00')
-		deleteOperation := NewDeleteOperation(elementID)
+		deleteOperation := protocol.NewDeleteOperation(elementID)
 		d.DeleteLog[elementID] = deleteOperation
 		return nil
 	}
@@ -181,6 +182,33 @@ func (d *Document) RemoteDelete(elementID identifier.ID) error {
 	}
 
 	d.integrateDeletion(elementID)
+
+	return nil
+}
+
+func (d *Document) IntegrateDelta(delta protocol.Delta) error {
+
+	var inserts []*protocol.InsertOperation
+	inserts = delta.Inserts
+
+	for _, v := range inserts {
+		err := d.RemoteInsert(v.NewID, v.OriginID, v.RightID, v.Content)
+		if err != nil {
+			if err.Error() != "Pending value." && err.Error() != "The value was already inserted." {
+				return err
+			}
+		}
+	}
+
+	var deletes []*protocol.DeleteOperation
+	deletes = delta.Deletes
+
+	for _, v := range deletes {
+		err := d.RemoteDelete(v.TargetID)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

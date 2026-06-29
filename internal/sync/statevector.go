@@ -5,6 +5,7 @@ import (
 
 	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 )
 
 type Vector struct {
@@ -166,9 +167,9 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 	return missingInserts, missingDeletes
 }
 
-func ComputeSerializedDelta(localDocument document.Document, missingInserts []identifier.ID, missingDeletes []identifier.ID) Delta {
+func ComputeSerializedDelta(localDocument document.Document, missingInserts []identifier.ID, missingDeletes []identifier.ID) protocol.Delta {
 
-	var inserts []*document.InsertOperation
+	var inserts []*protocol.InsertOperation
 
 	for _, v := range missingInserts {
 
@@ -180,7 +181,7 @@ func ComputeSerializedDelta(localDocument document.Document, missingInserts []id
 
 	}
 
-	var deletes []*document.DeleteOperation
+	var deletes []*protocol.DeleteOperation
 
 	for _, v := range missingDeletes {
 
@@ -191,5 +192,5 @@ func ComputeSerializedDelta(localDocument document.Document, missingInserts []id
 		}
 	}
 
-	return Delta{Inserts: inserts, Deletes: deletes}
+	return protocol.Delta{Inserts: inserts, Deletes: deletes}
 }

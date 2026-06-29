@@ -1,4 +1,4 @@
-package document
+package protocol
 
 import "github.com/john6604/yata-collaborative-editor/internal/identifier"
 
