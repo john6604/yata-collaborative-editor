@@ -22,6 +22,8 @@ type Document struct {
 	Clock            int
 	PendingInserts   map[identifier.ID]*PendingElement
 	PendingDeletes   map[identifier.ID]*PendingElement
+	InsertLog        map[identifier.ID]*InsertOperation
+	DeleteLog        map[identifier.ID]*DeleteOperation
 }
 
 // Function to generate a new document
@@ -34,6 +36,8 @@ func NewDocument() *Document {
 	document.ElementsByID = make(map[identifier.ID]*Element)
 	document.PendingInserts = make(map[identifier.ID]*PendingElement)
 	document.PendingDeletes = make(map[identifier.ID]*PendingElement)
+	document.InsertLog = make(map[identifier.ID]*InsertOperation)
+	document.DeleteLog = make(map[identifier.ID]*DeleteOperation)
 	document.CharacterCounter = 0
 	document.ClientID = generateUUID()
 	document.Clock = 0
@@ -85,6 +89,8 @@ func (d *Document) InsertElement(index int, character byte) (error, identifier.I
 	previousElement.Right = insertedElement
 	nextElement.Left = insertedElement
 	d.ElementsByID[insertedElement.ElementID] = insertedElement
+	insertOperation := NewInsertOperation(insertedElement.ElementID, previousElement.ElementID, nextElement.ElementID, character)
+	d.InsertLog[insertedElement.ElementID] = insertOperation
 
 	d.CharacterCounter++
 
@@ -102,6 +108,8 @@ func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, 
 	right.Left = element
 
 	d.ElementsByID[newID] = element
+	insertOperation := NewInsertOperation(newID, originID, rightID, content)
+	d.InsertLog[newID] = insertOperation
 
 	d.CharacterCounter++
 
@@ -116,6 +124,8 @@ func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rig
 
 	if d.ElementsByID[originID] == nil || d.ElementsByID[rightID] == nil {
 		d.PendingInserts[newID] = NewPending(newID, originID, rightID, content)
+		insertOperation := NewInsertOperation(newID, originID, rightID, content)
+		d.InsertLog[newID] = insertOperation
 		return errors.New("Pending value.")
 	}
 
@@ -139,6 +149,8 @@ func (d *Document) Delete(index int) error {
 
 	element.IsDeleted = true
 	d.CharacterCounter--
+	deleteOperation := NewDeleteOperation(element.ElementID)
+	d.DeleteLog[element.ElementID] = deleteOperation
 
 	return nil
 }
@@ -149,6 +161,9 @@ func (d *Document) integrateDeletion(elementID identifier.ID) {
 	element.IsDeleted = true
 
 	d.CharacterCounter--
+
+	deleteOperation := NewDeleteOperation(element.ElementID)
+	d.DeleteLog[element.ElementID] = deleteOperation
 }
 
 // Function to delete an element remotely
@@ -156,6 +171,8 @@ func (d *Document) RemoteDelete(elementID identifier.ID) error {
 
 	if d.ElementsByID[elementID] == nil {
 		d.PendingDeletes[elementID] = NewPending(elementID, identifier.ID{}, identifier.ID{}, '\x00')
+		deleteOperation := NewDeleteOperation(elementID)
+		d.DeleteLog[elementID] = deleteOperation
 		return nil
 	}
 

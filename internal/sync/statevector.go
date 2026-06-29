@@ -165,3 +165,31 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 
 	return missingInserts, missingDeletes
 }
+
+func ComputeSerializedDelta(localDocument document.Document, missingInserts []identifier.ID, missingDeletes []identifier.ID) Delta {
+
+	var inserts []*document.InsertOperation
+
+	for _, v := range missingInserts {
+
+		value, exists := localDocument.InsertLog[v]
+
+		if exists {
+			inserts = append(inserts, value)
+		}
+
+	}
+
+	var deletes []*document.DeleteOperation
+
+	for _, v := range missingDeletes {
+
+		value, exists := localDocument.DeleteLog[v]
+
+		if exists {
+			deletes = append(deletes, value)
+		}
+	}
+
+	return Delta{Inserts: inserts, Deletes: deletes}
+}
