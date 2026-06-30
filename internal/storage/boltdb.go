@@ -65,27 +65,30 @@ func (s *Storage) CloseDB() error {
 	return nil
 }
 
-func (s *Storage) SaveMetadata(document *document.Document) error {
-
-	persistedMetadata := ToPersistedMetadata(document)
-
-	data, err := json.Marshal(persistedMetadata)
-
-	if err != nil {
-		return err
-	}
-
+func (s *Storage) SaveSnapshot(document *document.Document) error {
 	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("metadata"))
+		err1 := s.SaveMetadata(tx, document)
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket asigned.")
+		if err1 != nil {
+			return err1
 		}
 
-		err := bucket.Put([]byte("document"), data)
+		err2 := s.SaveElements(tx, *document)
 
-		if err != nil {
-			return fmt.Errorf("Failed to assign data.")
+		if err2 != nil {
+			return err2
+		}
+
+		err3 := s.SaveInsertOperations(tx, *document)
+
+		if err3 != nil {
+			return err3
+		}
+
+		err4 := s.SaveDeleteOperations(tx, *document)
+
+		if err4 != nil {
+			return err4
 		}
 
 		return nil
@@ -98,31 +101,98 @@ func (s *Storage) SaveMetadata(document *document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadMetadata() (*persistence.PersistedMetadata, error) {
+func (s *Storage) LoadSnapshot() (*persistence.PersistedMetadata, map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, map[identifier.ID]*protocol.InsertOperation, map[identifier.ID]*protocol.DeleteOperation, error) {
 
-	var persistedMetadata persistence.PersistedMetadata
+	var metadata *persistence.PersistedMetadata
+	var err1 error
 
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("metadata"))
+	var elementsPersisted map[identifier.ID]*persistence.PersistedElement
+	var elementsByID map[identifier.ID]*document.Element
+	var err2 error
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket found.")
+	var insertLog map[identifier.ID]*protocol.InsertOperation
+	var err3 error
+	var deleteLog map[identifier.ID]*protocol.DeleteOperation
+	var err4 error
+
+	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+
+		metadata, err1 = s.LoadMetadata(tx)
+
+		if err1 != nil {
+			return err1
 		}
 
-		data := bucket.Get([]byte("document"))
+		elementsPersisted, elementsByID, err2 = s.LoadElements(tx)
 
-		if data == nil {
-			return fmt.Errorf("No data associated with the key.")
+		if err2 != nil {
+			return err2
 		}
 
-		err := json.Unmarshal(data, &persistedMetadata)
+		insertLog, err3 = s.LoadInsertOperations(tx)
 
-		if err != nil {
-			return err
+		if err3 != nil {
+			return err3
+		}
+
+		deleteLog, err4 = s.LoadDeleteOperations(tx)
+
+		if err4 != nil {
+			return err4
 		}
 
 		return nil
 	})
+
+	if errTransaction != nil {
+		return nil, nil, nil, nil, nil, errTransaction
+	}
+
+	return metadata, elementsPersisted, elementsByID, insertLog, deleteLog, nil
+}
+
+func (s *Storage) SaveMetadata(tx *bolt.Tx, document *document.Document) error {
+
+	persistedMetadata := ToPersistedMetadata(document)
+
+	data, err := json.Marshal(persistedMetadata)
+
+	if err != nil {
+		return err
+	}
+
+	bucket := tx.Bucket([]byte("metadata"))
+
+	if bucket == nil {
+		return fmt.Errorf("No bucket asigned.")
+	}
+
+	err1 := bucket.Put([]byte("document"), data)
+
+	if err1 != nil {
+		return fmt.Errorf("Failed to assign data.")
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadMetadata(tx *bolt.Tx) (*persistence.PersistedMetadata, error) {
+
+	var persistedMetadata persistence.PersistedMetadata
+
+	bucket := tx.Bucket([]byte("metadata"))
+
+	if bucket == nil {
+		return nil, fmt.Errorf("No bucket found.")
+	}
+
+	data := bucket.Get([]byte("document"))
+
+	if data == nil {
+		return nil, fmt.Errorf("No data associated with the key.")
+	}
+
+	err := json.Unmarshal(data, &persistedMetadata)
 
 	if err != nil {
 		return nil, err
@@ -135,262 +205,208 @@ func formatID(clientID identifier.ID) string {
 	return "(" + clientID.ClientID + "," + fmt.Sprint(clientID.Clock) + ")"
 }
 
-func (s *Storage) SaveElements(document document.Document) error {
+func (s *Storage) SaveElements(tx *bolt.Tx, document document.Document) error {
 
-	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+	bucket := tx.Bucket([]byte("elements"))
 
-		bucket := tx.Bucket([]byte("elements"))
+	if bucket == nil {
+		return fmt.Errorf("No bucket assigned.")
+	}
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
+	current := document.Start
+
+	for current != nil {
+
+		id := formatID(current.ElementID)
+		elementID := []byte(id)
+
+		persistedElement := ToPersistedElement(current)
+
+		data, err := json.Marshal(persistedElement)
+
+		if err != nil {
+			return err
 		}
 
-		current := document.Start
+		err1 := bucket.Put(elementID, data)
 
-		for current != nil {
-
-			id := formatID(current.ElementID)
-			elementID := []byte(id)
-
-			persistedElement := ToPersistedElement(current)
-
-			data, err := json.Marshal(persistedElement)
-
-			if err != nil {
-				return err
-			}
-
-			err1 := bucket.Put(elementID, data)
-
-			if err1 != nil {
-				return err1
-			}
-
-			current = current.Right
+		if err1 != nil {
+			return err1
 		}
 
-		return nil
-	})
-
-	if errTransaction != nil {
-		return errTransaction
+		current = current.Right
 	}
 
 	return nil
 }
 
-func (s *Storage) LoadElements() (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, error) {
+func (s *Storage) LoadElements(tx *bolt.Tx) (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, error) {
 
 	elementByIDs := make(map[identifier.ID]*document.Element)
 	elementsPersisted := make(map[identifier.ID]*persistence.PersistedElement)
 
-	errTransaction := s.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("elements"))
+	bucket := tx.Bucket([]byte("elements"))
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
-		}
+	if bucket == nil {
+		return nil, nil, fmt.Errorf("No bucket assigned.")
+	}
 
-		err := bucket.ForEach(func(k, v []byte) error {
+	err := bucket.ForEach(func(k, v []byte) error {
 
-			var persistedElement persistence.PersistedElement
+		var persistedElement persistence.PersistedElement
 
-			err := json.Unmarshal(v, &persistedElement)
-
-			if err != nil {
-				return err
-			}
-
-			elementsPersisted[identifier.ID(persistedElement.ElementID)] = &persistedElement
-
-			element := ToElement(persistedElement)
-
-			elementByIDs[element.ElementID] = &element
-
-			return nil
-		})
+		err := json.Unmarshal(v, &persistedElement)
 
 		if err != nil {
 			return err
 		}
 
+		elementsPersisted[identifier.ID(persistedElement.ElementID)] = &persistedElement
+
+		element := ToElement(persistedElement)
+
+		elementByIDs[element.ElementID] = &element
+
 		return nil
 	})
 
-	if errTransaction != nil {
-		return nil, nil, errTransaction
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return elementsPersisted, elementByIDs, nil
-
 }
 
-func (s *Storage) SaveInsertOperations(document document.Document) error {
+func (s *Storage) SaveInsertOperations(tx *bolt.Tx, document document.Document) error {
 
-	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+	bucket := tx.Bucket([]byte("insert_log"))
 
-		bucket := tx.Bucket([]byte("insert_log"))
+	if bucket == nil {
+		return fmt.Errorf("No bucket assigned.")
+	}
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
+	inserts := document.InsertLog
+
+	for k, v := range inserts {
+
+		id := formatID(k)
+		newID := []byte(id)
+
+		persistedInsert := ToPersistedInsertOperation(v)
+
+		data, err := json.Marshal(persistedInsert)
+
+		if err != nil {
+			return err
 		}
 
-		inserts := document.InsertLog
+		err1 := bucket.Put(newID, data)
 
-		for k, v := range inserts {
-
-			id := formatID(k)
-			newID := []byte(id)
-
-			persistedInsert := ToPersistedInsertOperation(v)
-
-			data, err := json.Marshal(persistedInsert)
-
-			if err != nil {
-				return err
-			}
-
-			err1 := bucket.Put(newID, data)
-
-			if err1 != nil {
-				return err1
-			}
+		if err1 != nil {
+			return err1
 		}
-
-		return nil
-	})
-
-	if errTransaction != nil {
-		return errTransaction
 	}
 
 	return nil
 }
 
-func (s *Storage) LoadInsertOperations() (map[identifier.ID]*protocol.InsertOperation, error) {
+func (s *Storage) LoadInsertOperations(tx *bolt.Tx) (map[identifier.ID]*protocol.InsertOperation, error) {
 
 	insertLog := make(map[identifier.ID]*protocol.InsertOperation)
 
-	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+	bucket := tx.Bucket([]byte("insert_log"))
 
-		bucket := tx.Bucket([]byte("insert_log"))
+	if bucket == nil {
+		return nil, fmt.Errorf("No bucket assigned.")
+	}
 
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
-		}
+	err := bucket.ForEach(func(k, v []byte) error {
 
-		err := bucket.ForEach(func(k, v []byte) error {
+		var persistedInsert persistence.PersistedInsertOperation
 
-			var persistedInsert persistence.PersistedInsertOperation
-
-			err := json.Unmarshal(v, &persistedInsert)
-
-			if err != nil {
-				return err
-			}
-
-			insert := ToInsertOperation(persistedInsert)
-
-			insertLog[insert.NewID] = &insert
-
-			return nil
-
-		})
+		err := json.Unmarshal(v, &persistedInsert)
 
 		if err != nil {
 			return err
 		}
 
+		insert := ToInsertOperation(persistedInsert)
+
+		insertLog[insert.NewID] = &insert
+
 		return nil
+
 	})
 
-	if errTransaction != nil {
-		return nil, errTransaction
+	if err != nil {
+		return nil, err
 	}
 
 	return insertLog, nil
 }
 
-func (s *Storage) SaveDeleteOperations(document document.Document) error {
+func (s *Storage) SaveDeleteOperations(tx *bolt.Tx, document document.Document) error {
 
-	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
+	bucket := tx.Bucket([]byte("delete_log"))
 
-		bucket := tx.Bucket([]byte("delete_log"))
-
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
-		}
-
-		deletes := document.DeleteLog
-
-		for k, v := range deletes {
-
-			id := formatID(k)
-			targetID := []byte(id)
-
-			persistedDelete := ToPersistedDeleteOperation(v)
-
-			data, err := json.Marshal(persistedDelete)
-
-			if err != nil {
-				return err
-			}
-
-			err1 := bucket.Put(targetID, data)
-
-			if err1 != nil {
-				return err1
-			}
-		}
-
-		return nil
-	})
-
-	if errTransaction != nil {
-		return errTransaction
+	if bucket == nil {
+		return fmt.Errorf("No bucket assigned.")
 	}
 
-	return nil
-}
+	deletes := document.DeleteLog
 
-func (s *Storage) LoadDeleteOperations() (map[identifier.ID]*protocol.DeleteOperation, error) {
+	for k, v := range deletes {
 
-	deleteLog := make(map[identifier.ID]*protocol.DeleteOperation)
+		id := formatID(k)
+		targetID := []byte(id)
 
-	errTransaction := s.db.View(func(tx *bolt.Tx) error {
+		persistedDelete := ToPersistedDeleteOperation(v)
 
-		bucket := tx.Bucket([]byte("delete_log"))
-
-		if bucket == nil {
-			return fmt.Errorf("No bucket assigned.")
-		}
-
-		err := bucket.ForEach(func(k, v []byte) error {
-
-			var persistedDelete persistence.PersistedDeleteOperation
-
-			err := json.Unmarshal(v, &persistedDelete)
-
-			if err != nil {
-				return err
-			}
-
-			delete := ToDeleteOperation(persistedDelete)
-
-			deleteLog[delete.TargetID] = &delete
-
-			return nil
-		})
+		data, err := json.Marshal(persistedDelete)
 
 		if err != nil {
 			return err
 		}
 
+		err1 := bucket.Put(targetID, data)
+
+		if err1 != nil {
+			return err1
+		}
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadDeleteOperations(tx *bolt.Tx) (map[identifier.ID]*protocol.DeleteOperation, error) {
+
+	deleteLog := make(map[identifier.ID]*protocol.DeleteOperation)
+
+	bucket := tx.Bucket([]byte("delete_log"))
+
+	if bucket == nil {
+		return nil, fmt.Errorf("No bucket assigned.")
+	}
+
+	err := bucket.ForEach(func(k, v []byte) error {
+
+		var persistedDelete persistence.PersistedDeleteOperation
+
+		err := json.Unmarshal(v, &persistedDelete)
+
+		if err != nil {
+			return err
+		}
+
+		delete := ToDeleteOperation(persistedDelete)
+
+		deleteLog[delete.TargetID] = &delete
+
 		return nil
 	})
 
-	if errTransaction != nil {
-		return nil, errTransaction
+	if err != nil {
+		return nil, err
 	}
 
 	return deleteLog, nil

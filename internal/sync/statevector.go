@@ -17,7 +17,7 @@ func validateClockContinuity(document document.Document, idClient string, maxClo
 
 	for i := 0; i <= maxClock; i++ {
 		id := identifier.NewID(idClient, i)
-		_, exists := document.ElementsByID[*id]
+		_, exists := document.InsertLog[*id]
 
 		if !exists {
 			return false
@@ -29,7 +29,9 @@ func validateClockContinuity(document document.Document, idClient string, maxClo
 
 func (v *Vector) GenerateStateVector(elements document.Document) {
 
-	for k := range elements.ElementsByID {
+	v.StateVectors = make(map[string]int)
+
+	for k := range elements.InsertLog {
 
 		clientID := k.ClientID
 		clock := k.Clock
@@ -70,18 +72,7 @@ func (v *Vector) GenerateDeleteSet(deletes document.Document) {
 
 	v.DeleteSet = make(map[string][]int)
 
-	for k, value := range deletes.ElementsByID {
-
-		clientID := k.ClientID
-		clock := k.Clock
-
-		if value.IsDeleted == true {
-			v.DeleteSet[clientID] = append(v.DeleteSet[clientID], clock)
-		}
-
-	}
-
-	for k := range deletes.PendingDeletes {
+	for k := range deletes.DeleteLog {
 
 		clientID := k.ClientID
 		clock := k.Clock
@@ -113,7 +104,7 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 	insertsKnown := vector.StateVectors
 	deletesKnown := vector.DeleteSet
 
-	for k, v := range localDocument.ElementsByID {
+	for k := range localDocument.InsertLog {
 
 		clientID := k.ClientID
 		clock := k.Clock
@@ -123,7 +114,6 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 		}
 
 		value, exists := insertsKnown[clientID]
-		value1, exists1 := deletesKnown[clientID]
 
 		if !exists {
 			missingInserts = append(missingInserts, k)
@@ -133,18 +123,9 @@ func ComputeDelta(localDocument document.Document, vector Vector) ([]identifier.
 			}
 		}
 
-		if v.IsDeleted {
-			if !exists1 {
-				missingDeletes = append(missingDeletes, k)
-			} else {
-				if !deleteExists(value1, clock) {
-					missingDeletes = append(missingDeletes, k)
-				}
-			}
-		}
 	}
 
-	for k := range localDocument.PendingDeletes {
+	for k := range localDocument.DeleteLog {
 
 		clientID := k.ClientID
 		clock := k.Clock
