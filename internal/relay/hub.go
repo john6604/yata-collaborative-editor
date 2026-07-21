@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
@@ -16,7 +18,7 @@ func NewHub() *Hub {
 	return &hub
 }
 
-func (h *Hub) Join(roomID string, clientID string) (*ClientSession, error) {
+func (h *Hub) Join(roomID string, clientID string, conn *websocket.Conn) (*ClientSession, error) {
 
 	newRoomID := strings.TrimSpace(roomID)
 
@@ -46,7 +48,7 @@ func (h *Hub) Join(roomID string, clientID string) (*ClientSession, error) {
 		return nil, errors.New("Client already exists.")
 	}
 
-	clientSession := NewClientSession(newClientID, newRoomID)
+	clientSession := NewClientSession(newClientID, newRoomID, conn)
 
 	room.clients[newClientID] = clientSession
 
