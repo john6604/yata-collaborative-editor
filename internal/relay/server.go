@@ -48,32 +48,38 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if messageType != websocket.TextMessage {
+		SendErrorMessage(protocol.ExpectedMessageCode, protocol.ExpectedMessage, conn)
 		return
 	}
 
 	version, requestType, payloadJoin, err := protocol.DecodeJoinMessage(message)
 
 	if err != nil {
+		SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
 		return
 	}
 
 	if version != protocol.SupportedVersion {
+		SendErrorMessage(protocol.UnsupportedVersion, protocol.UnsupportedVersionMessage, conn)
 		return
 	}
 
 	if requestType != protocol.TypeJoin {
+		SendErrorMessage(protocol.ExpectedJoin, protocol.ExpectedJoinMessage, conn)
 		return
 	}
 
 	room, client, errJoin := protocol.DecodeJoin(payloadJoin)
 
 	if errJoin != nil {
+		SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
 		return
 	}
 
 	session, err1 := rs.hub.Join(room, client, conn)
 
 	if err1 != nil {
+		SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
 		return
 	}
 
@@ -82,6 +88,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 	ackBytes, errAck := protocol.EncodeJoinAck(room, client)
 
 	if errAck != nil {
+		SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
 		return
 	}
 
@@ -124,4 +131,20 @@ func (rs *RelayServer) Start() error {
 	rs.serverHTTP = server
 
 	return server.ListenAndServe()
+}
+
+func SendErrorMessage(code string, message string, conn *websocket.Conn) {
+
+	bytes, err := protocol.EncodeErrorPayload(code, message)
+
+	if err != nil {
+		return
+	}
+
+	errSend := conn.WriteMessage(websocket.TextMessage, bytes)
+
+	if errSend != nil {
+		return
+	}
+
 }
