@@ -2,8 +2,8 @@ package identifier
 
 // Definition of structur for internal ID
 type ID struct {
-	ClientID string
-	Clock    int
+	ClientID string `json:"client_id"`
+	Clock    int    `json:"clock"`
 }
 
 // Constructor function

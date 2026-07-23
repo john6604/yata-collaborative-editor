@@ -111,7 +111,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 			break
 		}
 
-		version, typeMessage, _, errBytes := protocol.DecodeEnvelope(message)
+		version, typeMessage, bytes, errBytes := protocol.DecodeEnvelope(message)
 
 		if errBytes != nil {
 			SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
@@ -125,7 +125,16 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 
 		switch typeMessage {
 		case protocol.TypeUpdate:
+
+			_, errPayload := protocol.DecodeUpdate(bytes)
+
+			if errPayload != nil {
+				SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
+				continue
+			}
+
 			err := rs.hub.BroadcastToRoom(session, message)
+
 			if err != nil {
 				if err == ErrNotJoined {
 					SendErrorMessage(protocol.NotJoined, protocol.NotJoinedMessage, conn)

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 )
 
 var SupportedVersion = 1
@@ -12,6 +14,11 @@ var TypeJoin = "join"
 var TypeJoinAck = "join_ack"
 var TypeError = "error"
 var TypeUpdate = "update"
+
+var OpInsert = "insert"
+var OpDelete = "delete"
+var OpSync1 = "sync_step1"
+var OpSync2 = "sync_step2"
 
 var InternalError = "internal_error"
 var InternalErrorMessage = "Server internal error."
@@ -56,7 +63,35 @@ type ErrorPayload struct {
 }
 
 type UpdatePayload struct {
-	Operations json.RawMessage `json:"op"`
+	Operation json.RawMessage `json:"op"`
+}
+
+type OperationEnvelope struct {
+	Type string `json:"type"`
+}
+
+type InsertOp struct {
+	Type      string        `json:"type"`
+	NewID     identifier.ID `json:"new_id"`
+	OriginID  identifier.ID `json:"origin_id"`
+	RightID   identifier.ID `json:"right_id"`
+	Character byte          `json:"character"`
+}
+
+type DeleteOp struct {
+	Type     string        `json:"type"`
+	TargetID identifier.ID `json:"target_id"`
+}
+
+type SyncOp1 struct {
+	Type        string `json:"type"`
+	VectorState json.RawMessage/* true value : map[identifier.ID]*InsertOperation*/ `json:"vector_state"`
+	DeleteSet   json.RawMessage/* true value : map[identifier.ID]*DeleteOperation*/ `json:"delete_set"`
+}
+
+type SyncOp2 struct {
+	Type  string `json:"type"`
+	Delta json.RawMessage/* true value : *Delta*/ `json:"delta"`
 }
 
 func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
@@ -70,6 +105,64 @@ func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
 	}
 
 	return msg.Version, msg.MessageType, msg.Payload, nil
+}
+
+func DecodeUpdate(message []byte) (UpdatePayload, error) {
+
+	var payload UpdatePayload
+
+	err := json.Unmarshal(message, &payload)
+
+	if err != nil {
+		return UpdatePayload{}, err
+	}
+
+	if len(payload.Operation) == 0 {
+		return UpdatePayload{}, errors.New("missing_field")
+	}
+
+	var operationEnvelope OperationEnvelope
+
+	errDecode := json.Unmarshal(payload.Operation, &operationEnvelope)
+
+	if errDecode != nil {
+		return UpdatePayload{}, errDecode
+	}
+
+	formattedType := strings.TrimSpace(operationEnvelope.Type)
+
+	if len(formattedType) == 0 {
+		return UpdatePayload{}, errors.New("invalid_payload")
+	}
+
+	if formattedType != OpInsert && formattedType != OpDelete && formattedType != OpSync1 && formattedType != OpSync2 {
+		return UpdatePayload{}, errors.New("invalid_payload")
+	}
+
+	switch formattedType {
+	case OpInsert:
+		errInsert := DecodeInsert(payload)
+		if errInsert != nil {
+			return UpdatePayload{}, errInsert
+		}
+	case OpDelete:
+		errDelete := DecodeDelete(payload)
+		if errDelete != nil {
+			return UpdatePayload{}, errDelete
+		}
+	case OpSync1:
+		errSync1 := DecodeSync1(payload)
+		if errSync1 != nil {
+			return UpdatePayload{}, errSync1
+		}
+	case OpSync2:
+		errSync2 := DecodeSync2(payload)
+		if errSync2 != nil {
+			return UpdatePayload{}, errSync2
+		}
+	}
+
+	return payload, nil
 }
 
 func DecodeJoin(message json.RawMessage) (string, string, error) {
@@ -153,4 +246,88 @@ func EncodeErrorPayload(code string, message string) ([]byte, error) {
 	}
 
 	return errPackage, nil
+}
+
+func DecodeInsert(payloadInsert UpdatePayload) error {
+
+	var insertBytes InsertOp
+
+	err := json.Unmarshal(payloadInsert.Operation, &insertBytes)
+
+	if err != nil {
+		return err
+	}
+
+	if insertBytes.NewID.ClientID == "" {
+		return errors.New("missing_field")
+	}
+
+	if insertBytes.OriginID.ClientID == "" {
+		return errors.New("missing_field")
+	}
+
+	if insertBytes.RightID.ClientID == "" {
+		return errors.New("missing_field")
+	}
+
+	if insertBytes.Character == 0 {
+		return errors.New("missing_field")
+	}
+
+	return nil
+}
+
+func DecodeDelete(payloadDelete UpdatePayload) error {
+
+	var deleteBytes DeleteOp
+
+	err := json.Unmarshal(payloadDelete.Operation, &deleteBytes)
+
+	if err != nil {
+		return err
+	}
+
+	if deleteBytes.TargetID.ClientID == "" {
+		return errors.New("missing_field")
+	}
+
+	return nil
+}
+
+func DecodeSync1(payloadSync1 UpdatePayload) error {
+
+	var sync1Bytes SyncOp1
+
+	err := json.Unmarshal(payloadSync1.Operation, &sync1Bytes)
+
+	if err != nil {
+		return err
+	}
+
+	if len(sync1Bytes.VectorState) == 0 {
+		return errors.New("missing_field")
+	}
+
+	if len(sync1Bytes.DeleteSet) == 0 {
+		return errors.New("missing_field")
+	}
+
+	return nil
+}
+
+func DecodeSync2(payloadSync2 UpdatePayload) error {
+
+	var sync2Bytes SyncOp2
+
+	err := json.Unmarshal(payloadSync2.Operation, &sync2Bytes)
+
+	if err != nil {
+		return err
+	}
+
+	if len(sync2Bytes.Delta) == 0 {
+		return errors.New("missing_field")
+	}
+
+	return nil
 }
