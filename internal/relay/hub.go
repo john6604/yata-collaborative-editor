@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var ErrNotJoined = errors.New("not_joined")
+
 type Hub struct {
 	mutex sync.RWMutex // Possible change: this one only allows one read and write operation
 	rooms map[string]*Room
@@ -145,4 +147,53 @@ func (h *Hub) HasClient(roomID string, clientID string) (bool, error) {
 	_, clientExists := room.clients[formattedClientID]
 
 	return clientExists, nil
+}
+
+func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) error {
+
+	if senderSession == nil {
+		return ErrNotJoined
+	}
+
+	h.mutex.RLock()
+
+	room, roomExists := h.rooms[senderSession.roomID]
+
+	if !roomExists {
+		h.mutex.RUnlock()
+		return ErrNotJoined
+	}
+
+	storedSession, sessionExists := room.clients[senderSession.clientID]
+
+	if !sessionExists {
+		h.mutex.RUnlock()
+		return ErrNotJoined
+	}
+
+	if storedSession != senderSession {
+		h.mutex.RUnlock()
+		return ErrNotJoined
+	}
+
+	var receivers []*ClientSession
+
+	for _, v := range room.clients {
+		if v != senderSession && v.webSocket != nil {
+			receivers = append(receivers, v)
+		}
+	}
+
+	h.mutex.RUnlock()
+
+	for _, client := range receivers {
+
+		errSend := client.Send(message)
+
+		if errSend != nil {
+			return errSend
+		}
+	}
+
+	return nil
 }

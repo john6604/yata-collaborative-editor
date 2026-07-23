@@ -52,7 +52,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	version, requestType, payloadJoin, err := protocol.DecodeJoinMessage(message)
+	version, requestType, payloadJoin, err := protocol.DecodeEnvelope(message)
 
 	if err != nil {
 		SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
@@ -100,16 +100,45 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 
 	for {
 
-		messageType, _, err := conn.ReadMessage()
+		messageType, message, err := conn.ReadMessage()
 
 		if err != nil {
 			break
 		}
 
 		if messageType != websocket.TextMessage {
+			SendErrorMessage(protocol.ExpectedMessageCode, protocol.ExpectedMessage, conn)
 			break
 		}
 
+		version, typeMessage, _, errBytes := protocol.DecodeEnvelope(message)
+
+		if errBytes != nil {
+			SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
+			continue
+		}
+
+		if version != protocol.SupportedVersion {
+			SendErrorMessage(protocol.UnsupportedVersion, protocol.UnsupportedVersionMessage, conn)
+			continue
+		}
+
+		switch typeMessage {
+		case protocol.TypeUpdate:
+			err := rs.hub.BroadcastToRoom(session, message)
+			if err != nil {
+				if err == ErrNotJoined {
+					SendErrorMessage(protocol.NotJoined, protocol.NotJoinedMessage, conn)
+				} else {
+					SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+				}
+				continue
+			}
+			continue
+		default:
+			SendErrorMessage(protocol.UnknownMessageCode, protocol.UnknownMessage, conn)
+			continue
+		}
 	}
 }
 

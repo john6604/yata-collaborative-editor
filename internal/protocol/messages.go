@@ -7,9 +7,12 @@ import (
 )
 
 var SupportedVersion = 1
+
 var TypeJoin = "join"
 var TypeJoinAck = "join_ack"
 var TypeError = "error"
+var TypeUpdate = "update"
+
 var InternalError = "internal_error"
 var InternalErrorMessage = "Server internal error."
 var Unauthorized = "unauthorized"
@@ -28,6 +31,8 @@ var ExpectedJoin = "expected_join"
 var ExpectedJoinMessage = "The first message must be join."
 var DuplicateClient = "duplicate_client"
 var DuplicateClientMessage = "The client has already joined the room."
+var UnknownMessageCode = "unknown_message_type"
+var UnknownMessage = "Unkown message type."
 
 type Envelope struct {
 	Version     int             `json:"version"`
@@ -50,7 +55,11 @@ type ErrorPayload struct {
 	Message string `json:"message"`
 }
 
-func DecodeJoinMessage(message []byte) (int, string, json.RawMessage, error) {
+type UpdatePayload struct {
+	Operations json.RawMessage `json:"op"`
+}
+
+func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
 
 	var msg Envelope
 
