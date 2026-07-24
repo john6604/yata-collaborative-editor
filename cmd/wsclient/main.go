@@ -3,16 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/client"
 	"github.com/john6604/yata-collaborative-editor/internal/document"
-	"github.com/john6604/yata-collaborative-editor/internal/sync"
+	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
 )
 
 func main() {
 
 	doc := document.NewDocument()
+	var docMutex sync.Mutex
 
 	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8181/ws", nil)
 
@@ -60,7 +62,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	dataOperation, errOperation := sync.EncodeInsertOperation(*operation)
+	dataOperation, errOperation := internalSync.EncodeInsertOperation(*operation)
 
 	if errOperation != nil {
 		fmt.Println(errOperation)
@@ -76,6 +78,6 @@ func main() {
 
 	fmt.Println("Waiting for remote messages...")
 
-	client.RemoteMessageLoop(doc, conn)
+	go client.RemoteMessageLoop(doc, conn, &docMutex)
 
 }

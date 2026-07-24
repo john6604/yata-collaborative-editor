@@ -2,14 +2,15 @@ package client
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
-	"github.com/john6604/yata-collaborative-editor/internal/sync"
+	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
 )
 
-func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn) {
+func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync.Mutex) {
 
 	for {
 
@@ -45,20 +46,25 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn) {
 			continue
 		}
 
-		convertedOperation, errConversion := sync.ConvertUpdateOperation(updatePayload)
+		convertedOperation, errConversion := internalSync.ConvertUpdateOperation(updatePayload)
 
 		if errConversion != nil {
 			fmt.Println(errConversion)
 			continue
 		}
 
-		errApply := sync.ApplyConvertedOperation(doc, convertedOperation)
+		mutex.Lock()
+
+		errApply := internalSync.ApplyConvertedOperation(doc, convertedOperation)
 
 		if errApply != nil {
 			fmt.Println(errApply)
+			mutex.Unlock()
 			continue
 		}
 
 		fmt.Println(doc.String())
+
+		mutex.Unlock()
 	}
 }
