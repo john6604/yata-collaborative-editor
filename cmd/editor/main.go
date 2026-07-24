@@ -182,17 +182,19 @@ func (e *editor) execute(line string) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("índice inválido %q", fields[1])
 		}
-		if len(fields[2]) != 1 {
-			return false, errors.New("<char> debe contener exactamente un byte")
+		characters := []rune(fields[2])
+		if len(characters) != 1 {
+			return false, errors.New("<char> debe contener exactamente un carácter")
 		}
+		character := characters[0]
 
-		if err, _ := e.document.InsertElement(index, fields[2][0]); err != nil {
+		if err, _ := e.document.InsertElement(index, character); err != nil {
 			return false, err
 		}
 		if err := e.storage.SaveSnapshot(e.document); err != nil {
 			return false, fmt.Errorf("el insert se aplicó en memoria, pero no pudo persistirse: %w", err)
 		}
-		fmt.Fprintf(e.output, "Insertado %q en el índice %d.\n", fields[2][0], index)
+		fmt.Fprintf(e.output, "Insertado %q en el índice %d.\n", character, index)
 		return false, nil
 
 	case "delete":

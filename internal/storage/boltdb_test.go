@@ -32,7 +32,7 @@ func openTestStorage(t *testing.T) *Storage {
 	return storage
 }
 
-func insertByte(t *testing.T, doc *document.Document, character byte) identifier.ID {
+func insertRune(t *testing.T, doc *document.Document, character rune) identifier.ID {
 	t.Helper()
 
 	err, id := doc.InsertElement(doc.VisibleLength(), character)
@@ -66,9 +66,9 @@ func TestSnapshotRoundTripBasic(t *testing.T) {
 	original.ClientID = "snapshot-client"
 	original.Clock = 0
 
-	idA := insertByte(t, original, 'A')
-	idB := insertByte(t, original, 'B')
-	idC := insertByte(t, original, 'C')
+	idA := insertRune(t, original, 'A')
+	idB := insertRune(t, original, 'B')
+	idC := insertRune(t, original, 'C')
 
 	if err := original.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
@@ -127,6 +127,36 @@ func TestSnapshotRoundTripBasic(t *testing.T) {
 	if got := len(reconstructed.PendingDeletes); got != 0 {
 		t.Errorf("PendingDeletes has %d entries; expected 0", got)
 	}
+}
+
+func TestSnapshotRoundTripUnicodeContent(t *testing.T) {
+	storage := openTestStorage(t)
+
+	original := document.NewDocument()
+	original.ClientID = "unicode-snapshot-client"
+	original.Clock = 0
+
+	insertRune(t, original, 'H')
+	insertRune(t, original, 'ñ')
+	insertRune(t, original, '😀')
+
+	if err := storage.SaveSnapshot(original); err != nil {
+		t.Fatalf("SaveSnapshot() returned an unexpected error: %v", err)
+	}
+
+	reconstructed := document.NewDocument()
+	if err := reconstructed.ReconstructDocument(storage); err != nil {
+		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
+	}
+
+	if got, want := reconstructed.VisibleContent(), "Hñ😀"; got != want {
+		t.Errorf("VisibleContent() = %q; expected %q", got, want)
+	}
+	if got, want := reconstructed.VisibleLength(), 3; got != want {
+		t.Errorf("VisibleLength() = %d; expected %d", got, want)
+	}
+
+	assertInsertLogsEqual(t, reconstructed.InsertLog, original.InsertLog)
 }
 
 func TestSnapshotRoundTripKeepsUnresolvablePendings(t *testing.T) {

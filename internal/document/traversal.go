@@ -128,18 +128,18 @@ func (d *Document) findInsetionPoint(originID identifier.ID, rightID identifier.
 // Function to visualize the current content in the document
 func (d *Document) VisibleContent() string {
 
-	var content strings.Builder
+	content := make([]rune, 0, d.CharacterCounter)
 
 	current := d.Start.Right
 
 	for current != d.End {
 		if !current.IsDeleted {
-			content.WriteString(string(current.Content))
+			content = append(content, current.Content)
 		}
 		current = current.Right
 	}
 
-	return content.String()
+	return string(content)
 }
 
 // Function to call directly to Println

@@ -14,7 +14,7 @@ var (
 	syncEndID   = identifier.ID{ClientID: "END", Clock: -2}
 )
 
-func addInsertLog(doc *document.Document, id, originID, rightID identifier.ID, content byte) {
+func addInsertLog(doc *document.Document, id, originID, rightID identifier.ID, content rune) {
 	doc.InsertLog[id] = protocol.NewInsertOperation(id, originID, rightID, content)
 }
 
@@ -108,7 +108,7 @@ func TestComputeDeltaReturnsExactlyMissingInserts(t *testing.T) {
 	c0 := identifier.ID{ClientID: "client-C", Clock: 0}
 
 	for _, id := range []identifier.ID{a0, a1, a2, b0, b1, c0} {
-		addInsertLog(local, id, syncStartID, syncEndID, byte(id.Clock+'0'))
+		addInsertLog(local, id, syncStartID, syncEndID, rune(id.Clock+'0'))
 	}
 
 	remote := Vector{

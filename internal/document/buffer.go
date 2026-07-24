@@ -6,10 +6,10 @@ type PendingElement struct {
 	newID    identifier.ID
 	originID identifier.ID
 	rightID  identifier.ID
-	content  byte
+	content  rune
 }
 
-func NewPending(id identifier.ID, origin identifier.ID, right identifier.ID, content byte) *PendingElement {
+func NewPending(id identifier.ID, origin identifier.ID, right identifier.ID, content rune) *PendingElement {
 	pending := PendingElement{newID: id}
 	pending.originID = origin
 	pending.rightID = right

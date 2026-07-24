@@ -8,7 +8,7 @@ type PersistedElement struct {
 	LeftID    identifier.ID
 	RightID   identifier.ID
 	IsDeleted bool
-	Content   byte
+	Content   rune
 }
 
 type PersistedMetadata struct {
@@ -21,7 +21,7 @@ type PersistedInsertOperation struct {
 	NewID    identifier.ID
 	OriginID identifier.ID
 	RightID  identifier.ID
-	Content  byte
+	Content  rune
 }
 
 type PersistedDeleteOperation struct {

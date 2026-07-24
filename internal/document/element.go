@@ -9,11 +9,11 @@ type Element struct {
 	Left      *Element
 	Right     *Element
 	IsDeleted bool
-	Content   byte
+	Content   rune
 }
 
 // Constructor function
-func NewElement(id identifier.ID, origin *Element, left *Element, right *Element, content byte) *Element {
+func NewElement(id identifier.ID, origin *Element, left *Element, right *Element, content rune) *Element {
 	element := Element{ElementID: id}
 	element.Origin = origin
 	element.Left = left

@@ -6,14 +6,14 @@ type InsertOperation struct {
 	NewID    identifier.ID
 	OriginID identifier.ID
 	RightID  identifier.ID
-	Content  byte
+	Content  rune
 }
 
 type DeleteOperation struct {
 	TargetID identifier.ID
 }
 
-func NewInsertOperation(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content byte) *InsertOperation {
+func NewInsertOperation(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content rune) *InsertOperation {
 	insert := InsertOperation{NewID: newID}
 	insert.OriginID = originID
 	insert.RightID = rightID

@@ -11,7 +11,7 @@ import (
 
 var integrationEndID = identifier.ID{ClientID: "END", Clock: -2}
 
-func insertIntegrationByte(t *testing.T, doc *document.Document, character byte) identifier.ID {
+func insertIntegrationRune(t *testing.T, doc *document.Document, character rune) identifier.ID {
 	t.Helper()
 
 	err, id := doc.InsertElement(doc.VisibleLength(), character)
@@ -21,7 +21,7 @@ func insertIntegrationByte(t *testing.T, doc *document.Document, character byte)
 	return id
 }
 
-func integrateRemoteInsert(t *testing.T, doc *document.Document, id, originID, rightID identifier.ID, content byte) {
+func integrateRemoteInsert(t *testing.T, doc *document.Document, id, originID, rightID identifier.ID, content rune) {
 	t.Helper()
 
 	if err := doc.RemoteInsert(id, originID, rightID, content); err != nil {
@@ -75,9 +75,9 @@ func buildSourceAndLaggingReplica(t *testing.T) (*document.Document, *document.D
 	source.ClientID = "client-A"
 	source.Clock = 0
 
-	idA := insertIntegrationByte(t, source, 'A')
-	insertIntegrationByte(t, source, 'B')
-	insertIntegrationByte(t, source, 'C')
+	idA := insertIntegrationRune(t, source, 'A')
+	insertIntegrationRune(t, source, 'B')
+	insertIntegrationRune(t, source, 'C')
 
 	if err := source.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
@@ -91,6 +91,22 @@ func buildSourceAndLaggingReplica(t *testing.T) (*document.Document, *document.D
 
 func TestSyncEndToEndWithoutPersistence(t *testing.T) {
 	source, target := buildSourceAndLaggingReplica(t)
+
+	syncFromTo(t, source, target)
+
+	assertDocumentsConverged(t, source, target)
+}
+
+func TestSyncEndToEndWithUnicodeContent(t *testing.T) {
+	source := document.NewDocument()
+	source.ClientID = "unicode-source"
+	source.Clock = 0
+
+	insertIntegrationRune(t, source, 'H')
+	insertIntegrationRune(t, source, 'ñ')
+	insertIntegrationRune(t, source, '😀')
+
+	target := document.NewDocument()
 
 	syncFromTo(t, source, target)
 

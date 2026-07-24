@@ -75,7 +75,7 @@ type InsertOp struct {
 	NewID     identifier.ID `json:"new_id"`
 	OriginID  identifier.ID `json:"origin_id"`
 	RightID   identifier.ID `json:"right_id"`
-	Character byte          `json:"character"`
+	Character string        `json:"character"`
 }
 
 type DeleteOp struct {
@@ -270,8 +270,14 @@ func DecodeInsert(payloadInsert UpdatePayload) error {
 		return errors.New("missing_field")
 	}
 
-	if insertBytes.Character == 0 {
+	characters := []rune(insertBytes.Character)
+
+	if len(characters) == 0 {
 		return errors.New("missing_field")
+	}
+
+	if len(characters) != 1 {
+		return errors.New("invalid_payload")
 	}
 
 	return nil

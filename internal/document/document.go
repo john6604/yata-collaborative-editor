@@ -77,7 +77,7 @@ func (d *Document) generateElementID() *identifier.ID {
 }
 
 // Function to insert locally in the document
-func (d *Document) InsertElement(index int, character byte) (error, identifier.ID) {
+func (d *Document) InsertElement(index int, character rune) (error, identifier.ID) {
 
 	previousElement, nextElement, err := d.findVisiblePosition(index)
 
@@ -98,7 +98,7 @@ func (d *Document) InsertElement(index int, character byte) (error, identifier.I
 	return nil, *id
 }
 
-func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content byte) {
+func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content rune) {
 
 	left, right := d.findInsetionPoint(originID, rightID, newID)
 	origin := d.ElementsByID[originID]
@@ -117,7 +117,7 @@ func (d *Document) integrateInsert(newID identifier.ID, originID identifier.ID, 
 }
 
 // Function to insert remotely/concurrently in the document
-func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content byte) error {
+func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content rune) error {
 
 	if d.ElementsByID[newID] != nil {
 		return errors.New("The value was already inserted.")

@@ -7,12 +7,11 @@ import (
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 )
 
-// Test: insertText inserts all bytes from the given text at the end of the document.
+// Test: insertText inserts all runes from the given text at the end of the document.
 func insertText(t *testing.T, document *Document, text string) {
 	t.Helper()
 
-	for i := 0; i < len(text); i++ {
-		character := text[i]
+	for _, character := range text {
 		index := document.VisibleLength()
 
 		if err, _ := document.InsertElement(index, character); err != nil {
@@ -47,7 +46,7 @@ func TestNewDocument(t *testing.T) {
 	}
 }
 
-// Test: TestSequentialInsertion verifies that multiple bytes inserted sequentially produce the expected visible content and length.
+// Test: TestSequentialInsertion verifies that multiple runes inserted sequentially produce the expected visible content and length.
 func TestSequentialInsertion(t *testing.T) {
 	document := NewDocument()
 
@@ -62,7 +61,21 @@ func TestSequentialInsertion(t *testing.T) {
 	}
 }
 
-// Test: TestInsertAtBeginning verifies that a byte can be inserted at the beginning of an existing document.
+func TestUnicodeInsertionCountsRunes(t *testing.T) {
+	document := NewDocument()
+
+	insertText(t, document, "Hñ😀")
+
+	if got := document.VisibleContent(); got != "Hñ😀" {
+		t.Errorf("VisibleContent() = %q; expected %q", got, "Hñ😀")
+	}
+
+	if got := document.VisibleLength(); got != 3 {
+		t.Errorf("VisibleLength() = %d; expected %d", got, 3)
+	}
+}
+
+// Test: TestInsertAtBeginning verifies that a rune can be inserted at the beginning of an existing document.
 func TestInsertAtBeginning(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
@@ -80,7 +93,7 @@ func TestInsertAtBeginning(t *testing.T) {
 	}
 }
 
-// Test: TestInsertInMiddle verifies that a byte can be inserted between existing visible elements.
+// Test: TestInsertInMiddle verifies that a rune can be inserted between existing visible elements.
 func TestInsertInMiddle(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
@@ -463,7 +476,7 @@ func insertElementAndGetID(
 	t *testing.T,
 	document *Document,
 	index int,
-	content byte,
+	content rune,
 ) identifier.ID {
 	t.Helper()
 
@@ -487,7 +500,7 @@ func remoteInsertOrFail(
 	newID identifier.ID,
 	originID identifier.ID,
 	rightID identifier.ID,
-	content byte,
+	content rune,
 ) {
 	t.Helper()
 
@@ -510,7 +523,7 @@ func remoteInsertPendingOrFail(
 	newID identifier.ID,
 	originID identifier.ID,
 	rightID identifier.ID,
-	content byte,
+	content rune,
 ) {
 	t.Helper()
 
