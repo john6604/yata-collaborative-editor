@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 )
 
@@ -104,4 +105,28 @@ func ConvertUpdateOperation(payload protocol.UpdatePayload) (ConvertedOperation,
 	}
 
 	return convertedOperation, nil
+}
+
+func ApplyConvertedOperation(doc *document.Document, convertedOperation ConvertedOperation) error {
+
+	switch convertedOperation.Type {
+	case protocol.OpInsert:
+		insert := convertedOperation.Insert
+		err := doc.RemoteInsert(insert.NewID, insert.OriginID, insert.RightID, insert.Content)
+		if err != nil {
+			if err.Error() != "Pending value." {
+				return err
+			}
+		}
+	case protocol.OpDelete:
+		delete := convertedOperation.Delete
+		err := doc.RemoteDelete(delete.TargetID)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New("unsupported_operation")
+	}
+
+	return nil
 }

@@ -4,8 +4,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
+)
+
+var (
+	adapterStartID = identifier.ID{ClientID: "START", Clock: -1}
+	adapterEndID   = identifier.ID{ClientID: "END", Clock: -2}
 )
 
 func mustDecodeUpdatePayload(t *testing.T, payload string) protocol.UpdatePayload {
@@ -40,6 +46,27 @@ func assertEmptyConvertedOperation(t *testing.T, operation ConvertedOperation) {
 	}
 	if operation.Delete != (protocol.DeleteOperation{}) {
 		t.Errorf("ConvertedOperation.Delete = %#v; expected an empty value", operation.Delete)
+	}
+}
+
+func convertedInsert(newID identifier.ID, originID identifier.ID, rightID identifier.ID, content rune) ConvertedOperation {
+	return ConvertedOperation{
+		Type: protocol.OpInsert,
+		Insert: protocol.InsertOperation{
+			NewID:    newID,
+			OriginID: originID,
+			RightID:  rightID,
+			Content:  content,
+		},
+	}
+}
+
+func convertedDelete(targetID identifier.ID) ConvertedOperation {
+	return ConvertedOperation{
+		Type: protocol.OpDelete,
+		Delete: protocol.DeleteOperation{
+			TargetID: targetID,
+		},
 	}
 }
 
@@ -176,4 +203,126 @@ func TestConvertUpdateOperationRejectsSyncStep2AsUnsupportedConversion(t *testin
 		t.Fatalf("ConvertUpdateOperation() error = %q; expected %q", err.Error(), "unsupported_conversion")
 	}
 	assertEmptyConvertedOperation(t, converted)
+}
+
+func TestApplyConvertedOperationRemoteInsert(t *testing.T) {
+	doc := document.NewDocument()
+	idH := identifier.ID{ClientID: "A", Clock: 1}
+
+	err := ApplyConvertedOperation(doc, convertedInsert(idH, adapterStartID, adapterEndID, 'H'))
+	if err != nil {
+		t.Fatalf("ApplyConvertedOperation(insert) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), "H"; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+}
+
+func TestApplyConvertedOperationTwoRemoteInsertsInOrder(t *testing.T) {
+	doc := document.NewDocument()
+	idH := identifier.ID{ClientID: "A", Clock: 1}
+	idI := identifier.ID{ClientID: "A", Clock: 2}
+
+	if err := ApplyConvertedOperation(doc, convertedInsert(idH, adapterStartID, adapterEndID, 'H')); err != nil {
+		t.Fatalf("ApplyConvertedOperation(insert H) returned an unexpected error: %v", err)
+	}
+	if err := ApplyConvertedOperation(doc, convertedInsert(idI, idH, adapterEndID, 'i')); err != nil {
+		t.Fatalf("ApplyConvertedOperation(insert i) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), "Hi"; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+}
+
+func TestApplyConvertedOperationRemoteDelete(t *testing.T) {
+	doc := document.NewDocument()
+	idH := identifier.ID{ClientID: "A", Clock: 1}
+
+	if err := ApplyConvertedOperation(doc, convertedInsert(idH, adapterStartID, adapterEndID, 'H')); err != nil {
+		t.Fatalf("ApplyConvertedOperation(insert) returned an unexpected error: %v", err)
+	}
+	if err := ApplyConvertedOperation(doc, convertedDelete(idH)); err != nil {
+		t.Fatalf("ApplyConvertedOperation(delete) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), ""; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+	if element := doc.ElementsByID[idH]; element == nil {
+		t.Fatalf("element %v was not found after delete", idH)
+	} else if !element.IsDeleted {
+		t.Fatalf("element %v exists but was not marked as deleted", idH)
+	}
+}
+
+func TestApplyConvertedOperationRejectsUnknownType(t *testing.T) {
+	doc := document.NewDocument()
+
+	err := ApplyConvertedOperation(doc, ConvertedOperation{Type: "banana"})
+	if err == nil {
+		t.Fatal("ApplyConvertedOperation() returned nil; expected an error")
+	}
+	if err.Error() != "unsupported_operation" {
+		t.Fatalf("ApplyConvertedOperation() error = %q; expected %q", err.Error(), "unsupported_operation")
+	}
+	if got, want := doc.VisibleContent(), ""; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+}
+
+func TestApplyConvertedOperationKeepsMissingDependencyInsertPending(t *testing.T) {
+	doc := document.NewDocument()
+	idH := identifier.ID{ClientID: "A", Clock: 1}
+	idI := identifier.ID{ClientID: "A", Clock: 2}
+
+	err := ApplyConvertedOperation(doc, convertedInsert(idI, idH, adapterEndID, 'i'))
+	if err != nil {
+		t.Fatalf("ApplyConvertedOperation(pending insert) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), ""; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+	if got, want := len(doc.PendingInserts), 1; got != want {
+		t.Fatalf("len(PendingInserts) = %d; expected %d", got, want)
+	}
+}
+
+func TestApplyConvertedOperationKeepsMissingDeletePending(t *testing.T) {
+	doc := document.NewDocument()
+	missingID := identifier.ID{ClientID: "A", Clock: 99}
+
+	err := ApplyConvertedOperation(doc, convertedDelete(missingID))
+	if err != nil {
+		t.Fatalf("ApplyConvertedOperation(delete missing ID) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), ""; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+	if got, want := len(doc.PendingDeletes), 1; got != want {
+		t.Fatalf("len(PendingDeletes) = %d; expected %d", got, want)
+	}
+}
+
+func TestApplyConvertedOperationResolvesPendingInsert(t *testing.T) {
+	doc := document.NewDocument()
+	idH := identifier.ID{ClientID: "A", Clock: 1}
+	idI := identifier.ID{ClientID: "A", Clock: 2}
+
+	if err := ApplyConvertedOperation(doc, convertedInsert(idI, idH, adapterEndID, 'i')); err != nil {
+		t.Fatalf("ApplyConvertedOperation(pending insert) returned an unexpected error: %v", err)
+	}
+	if err := ApplyConvertedOperation(doc, convertedInsert(idH, adapterStartID, adapterEndID, 'H')); err != nil {
+		t.Fatalf("ApplyConvertedOperation(unblocking insert) returned an unexpected error: %v", err)
+	}
+
+	if got, want := doc.VisibleContent(), "Hi"; got != want {
+		t.Fatalf("VisibleContent() = %q; expected %q", got, want)
+	}
+	if got, want := len(doc.PendingInserts), 0; got != want {
+		t.Fatalf("len(PendingInserts) = %d; expected %d", got, want)
+	}
 }
