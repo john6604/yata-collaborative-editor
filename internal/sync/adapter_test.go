@@ -70,6 +70,38 @@ func convertedDelete(targetID identifier.ID) ConvertedOperation {
 	}
 }
 
+func mustEncodeAndConvertRoundTrip(t *testing.T, operation ConvertedOperation) ConvertedOperation {
+	t.Helper()
+
+	message, err := EncodeUpdateOperation(operation)
+	if err != nil {
+		t.Fatalf("EncodeUpdateOperation() returned an unexpected error: %v", err)
+	}
+
+	version, messageType, payload, err := protocol.DecodeEnvelope(message)
+	if err != nil {
+		t.Fatalf("DecodeEnvelope() returned an unexpected error: %v", err)
+	}
+	if version != protocol.SupportedVersion {
+		t.Fatalf("version = %d; expected %d", version, protocol.SupportedVersion)
+	}
+	if messageType != protocol.TypeUpdate {
+		t.Fatalf("message type = %q; expected %q", messageType, protocol.TypeUpdate)
+	}
+
+	updatePayload, err := protocol.DecodeUpdate(payload)
+	if err != nil {
+		t.Fatalf("DecodeUpdate() returned an unexpected error: %v", err)
+	}
+
+	converted, err := ConvertUpdateOperation(updatePayload)
+	if err != nil {
+		t.Fatalf("ConvertUpdateOperation() returned an unexpected error: %v", err)
+	}
+
+	return converted
+}
+
 func TestConvertUpdateOperationInsertASCII(t *testing.T) {
 	payload := mustDecodeUpdatePayload(t, `{"op":{"type":"insert","new_id":{"client_id":"A","clock":1},"origin_id":{"client_id":"root","clock":-2},"right_id":{"client_id":"root","clock":-1},"character":"H"}}`)
 
@@ -324,5 +356,82 @@ func TestApplyConvertedOperationResolvesPendingInsert(t *testing.T) {
 	}
 	if got, want := len(doc.PendingInserts), 0; got != want {
 		t.Fatalf("len(PendingInserts) = %d; expected %d", got, want)
+	}
+}
+
+func TestEncodeUpdateOperationRoundTripInsert(t *testing.T) {
+	idH := identifier.ID{ClientID: "B", Clock: 1}
+	original := convertedInsert(idH, adapterStartID, adapterEndID, 'H')
+
+	converted := mustEncodeAndConvertRoundTrip(t, original)
+
+	if converted.Type != protocol.OpInsert {
+		t.Fatalf("ConvertedOperation.Type = %q; expected %q", converted.Type, protocol.OpInsert)
+	}
+	if got, want := converted.Insert.NewID, idH; got != want {
+		t.Errorf("Insert.NewID = %v; expected %v", got, want)
+	}
+	if got, want := converted.Insert.OriginID, adapterStartID; got != want {
+		t.Errorf("Insert.OriginID = %v; expected %v", got, want)
+	}
+	if got, want := converted.Insert.RightID, adapterEndID; got != want {
+		t.Errorf("Insert.RightID = %v; expected %v", got, want)
+	}
+	if got, want := converted.Insert.Content, 'H'; got != want {
+		t.Errorf("Insert.Content = %q; expected %q", got, want)
+	}
+}
+
+func TestEncodeUpdateOperationRoundTripUnicodeInsert(t *testing.T) {
+	tests := []struct {
+		name    string
+		content rune
+	}{
+		{name: "enye", content: '\u00f1'},
+		{name: "emoji", content: '\U0001F600'},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id := identifier.ID{ClientID: "B", Clock: 1}
+			original := convertedInsert(id, adapterStartID, adapterEndID, tt.content)
+
+			converted := mustEncodeAndConvertRoundTrip(t, original)
+
+			if converted.Type != protocol.OpInsert {
+				t.Fatalf("ConvertedOperation.Type = %q; expected %q", converted.Type, protocol.OpInsert)
+			}
+			if converted.Insert.Content != tt.content {
+				t.Errorf("Insert.Content = %q; expected %q", converted.Insert.Content, tt.content)
+			}
+		})
+	}
+}
+
+func TestEncodeUpdateOperationRoundTripDelete(t *testing.T) {
+	targetID := identifier.ID{ClientID: "B", Clock: 1}
+	original := convertedDelete(targetID)
+
+	converted := mustEncodeAndConvertRoundTrip(t, original)
+
+	if converted.Type != protocol.OpDelete {
+		t.Fatalf("ConvertedOperation.Type = %q; expected %q", converted.Type, protocol.OpDelete)
+	}
+	if got, want := converted.Delete.TargetID, targetID; got != want {
+		t.Errorf("Delete.TargetID = %v; expected %v", got, want)
+	}
+}
+
+func TestEncodeUpdateOperationRejectsUnsupportedType(t *testing.T) {
+	message, err := EncodeUpdateOperation(ConvertedOperation{Type: "banana"})
+
+	if err == nil {
+		t.Fatal("EncodeUpdateOperation() returned nil; expected an error")
+	}
+	if err.Error() != "unsupported_operation" {
+		t.Fatalf("EncodeUpdateOperation() error = %q; expected %q", err.Error(), "unsupported_operation")
+	}
+	if message != nil {
+		t.Fatalf("EncodeUpdateOperation() bytes = %s; expected nil", message)
 	}
 }

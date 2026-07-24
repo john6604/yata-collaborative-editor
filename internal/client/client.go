@@ -23,8 +23,6 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn) {
 			continue
 		}
 
-		fmt.Println(string(message))
-
 		version, typeMessage, envelope, errEnvelope := protocol.DecodeEnvelope(message)
 
 		if errEnvelope != nil {

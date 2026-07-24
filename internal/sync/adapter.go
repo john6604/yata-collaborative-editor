@@ -130,3 +130,107 @@ func ApplyConvertedOperation(doc *document.Document, convertedOperation Converte
 
 	return nil
 }
+
+func EncodeInsertOperation(insertOp protocol.InsertOperation) ([]byte, error) {
+
+	content := string(insertOp.Content)
+
+	insertOperation := protocol.InsertOp{
+		Type:      protocol.OpInsert,
+		NewID:     insertOp.NewID,
+		OriginID:  insertOp.OriginID,
+		RightID:   insertOp.RightID,
+		Character: content,
+	}
+
+	insertEnvelope, errEnvelope := json.Marshal(insertOperation)
+
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: insertEnvelope,
+	}
+
+	updateEnvelope, errUpdateEnv := json.Marshal(updatePayload)
+
+	if errUpdateEnv != nil {
+		return nil, errUpdateEnv
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+
+	envelopeBytes, errBytes := json.Marshal(envelope)
+
+	if errBytes != nil {
+		return nil, errBytes
+	}
+
+	return envelopeBytes, nil
+}
+
+func EncodeDeleteOperation(deleteOp protocol.DeleteOperation) ([]byte, error) {
+
+	deleteOperation := protocol.DeleteOp{
+		Type:     protocol.OpDelete,
+		TargetID: deleteOp.TargetID,
+	}
+
+	deleteEnvelope, errEnvelope := json.Marshal(deleteOperation)
+
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: deleteEnvelope,
+	}
+
+	updateEnvelope, errUpdateEnv := json.Marshal(updatePayload)
+
+	if errUpdateEnv != nil {
+		return nil, errUpdateEnv
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+
+	envelopeBytes, errBytes := json.Marshal(envelope)
+
+	if errBytes != nil {
+		return nil, errBytes
+	}
+
+	return envelopeBytes, nil
+}
+
+func EncodeUpdateOperation(convertedOperation ConvertedOperation) ([]byte, error) {
+
+	var operation []byte
+	var errConversion error
+
+	switch convertedOperation.Type {
+	case protocol.OpInsert:
+		operation, errConversion = EncodeInsertOperation(convertedOperation.Insert)
+		if errConversion != nil {
+			return nil, errConversion
+		}
+	case protocol.OpDelete:
+		operation, errConversion = EncodeDeleteOperation(convertedOperation.Delete)
+		if errConversion != nil {
+			return nil, errConversion
+		}
+	default:
+		return nil, errors.New("unsupported_operation")
+	}
+
+	return operation, nil
+}
