@@ -50,7 +50,7 @@ Inserted 'H' at index 0.
 Inserted 'i' at index 1.
 > print
 Visible:  "Hi"
-Interno:  START -> H -> i -> END
+Internal: START -> H -> i -> END
 ```
 
 Delete the first visible character:
@@ -60,7 +60,7 @@ Delete the first visible character:
 Deleted the visible element at index 0.
 > print
 Visible:  "i"
-Interno:  START -> H(X) -> i -> END
+Internal: START -> H(X) -> i -> END
 ```
 
 Exit and save:

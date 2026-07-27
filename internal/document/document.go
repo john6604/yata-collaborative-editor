@@ -140,12 +140,12 @@ func (d *Document) RemoteInsert(newID identifier.ID, originID identifier.ID, rig
 }
 
 // Function to delete an element logically
-func (d *Document) Delete(index int) error {
+func (d *Document) Delete(index int) (error, identifier.ID) {
 
 	element, err := d.findVisibleElement(index)
 
 	if err != nil {
-		return err
+		return err, identifier.ID{}
 	}
 
 	element.IsDeleted = true
@@ -153,7 +153,7 @@ func (d *Document) Delete(index int) error {
 	deleteOperation := protocol.NewDeleteOperation(element.ElementID)
 	d.DeleteLog[element.ElementID] = deleteOperation
 
-	return nil
+	return nil, element.ElementID
 }
 
 func (d *Document) integrateDeletion(elementID identifier.ID) {

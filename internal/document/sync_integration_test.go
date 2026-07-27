@@ -79,7 +79,7 @@ func buildSourceAndLaggingReplica(t *testing.T) (*document.Document, *document.D
 	insertIntegrationRune(t, source, 'B')
 	insertIntegrationRune(t, source, 'C')
 
-	if err := source.Delete(1); err != nil {
+	if err, _ := source.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
 	}
 

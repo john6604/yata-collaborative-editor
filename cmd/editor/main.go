@@ -39,46 +39,46 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	flags := flag.NewFlagSet("editor", flag.ContinueOnError)
 	flags.SetOutput(errorOutput)
 
-	databasePath := flags.String("db", configuredDatabasePath(), "ruta del archivo BoltDB")
+	databasePath := flags.String("db", configuredDatabasePath(), "BoltDB file path")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 
 	absolutePath, err := filepath.Abs(*databasePath)
 	if err != nil {
-		fmt.Fprintf(errorOutput, "no se pudo resolver la ruta de la base: %v\n", err)
+		fmt.Fprintf(errorOutput, "could not resolve database path: %v\n", err)
 		return 1
 	}
 
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o755); err != nil {
-		fmt.Fprintf(errorOutput, "no se pudo crear el directorio de la base: %v\n", err)
+		fmt.Fprintf(errorOutput, "could not create database directory: %v\n", err)
 		return 1
 	}
 
 	store := &storage.Storage{}
 	if err := store.OpenDB(absolutePath); err != nil {
-		fmt.Fprintf(errorOutput, "no se pudo abrir BoltDB: %v\n", err)
+		fmt.Fprintf(errorOutput, "could not open BoltDB: %v\n", err)
 		return 1
 	}
 
 	doc := document.NewDocument()
 	if err := doc.ReconstructDocument(store); err != nil {
-		fmt.Fprintf(output, "No se encontró un snapshot válido (%v). Se creó un documento nuevo.\n", err)
+		fmt.Fprintf(output, "No valid snapshot was found (%v). A new document was created.\n", err)
 		doc = document.NewDocument()
 
 		// Persist the newly generated ClientID immediately. Even an empty editor
 		// therefore keeps the same identity after a clean restart.
 		if err := store.SaveSnapshot(doc); err != nil {
-			fmt.Fprintf(errorOutput, "no se pudo guardar el documento inicial: %v\n", err)
+			fmt.Fprintf(errorOutput, "could not save initial document: %v\n", err)
 			_ = store.CloseDB()
 			return 1
 		}
 	} else {
-		fmt.Fprintf(output, "Snapshot restaurado correctamente.\n")
+		fmt.Fprintf(output, "Snapshot restored successfully.\n")
 	}
 
-	fmt.Fprintf(output, "Base de datos: %s\n", absolutePath)
-	fmt.Fprintln(output, "Comandos: print, insert <index> <char>, delete <index>, save, state, exit")
+	fmt.Fprintf(output, "Database: %s\n", absolutePath)
+	fmt.Fprintln(output, "Commands: print, insert <index> <char>, delete <index>, save, state, exit")
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
@@ -90,7 +90,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 
 	exitCode := 0
 	if replErr != nil {
-		fmt.Fprintf(errorOutput, "editor finalizado con error: %v\n", replErr)
+		fmt.Fprintf(errorOutput, "editor finished with error: %v\n", replErr)
 		exitCode = 1
 	}
 
@@ -98,11 +98,11 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	// SIGTERM. Mutating commands already save eagerly, so this is the last
 	// durability barrier before closing BoltDB.
 	if err := store.SaveSnapshot(doc); err != nil {
-		fmt.Fprintf(errorOutput, "no se pudo guardar el snapshot final: %v\n", err)
+		fmt.Fprintf(errorOutput, "could not save final snapshot: %v\n", err)
 		exitCode = 1
 	}
 	if err := store.CloseDB(); err != nil {
-		fmt.Fprintf(errorOutput, "no se pudo cerrar BoltDB: %v\n", err)
+		fmt.Fprintf(errorOutput, "could not close BoltDB: %v\n", err)
 		exitCode = 1
 	}
 
@@ -134,15 +134,15 @@ func (e *editor) run(input io.Reader, signals <-chan os.Signal) error {
 
 		select {
 		case received := <-signals:
-			fmt.Fprintf(e.output, "\nSeñal %s recibida. Guardando y cerrando...\n", received)
+			fmt.Fprintf(e.output, "\nSignal %s received. Saving and closing...\n", received)
 			return nil
 
 		case line, ok := <-lines:
 			if !ok {
 				if err := <-scanResult; err != nil {
-					return fmt.Errorf("leer stdin: %w", err)
+					return fmt.Errorf("read stdin: %w", err)
 				}
-				fmt.Fprintln(e.output, "\nEntrada cerrada. Guardando y cerrando...")
+				fmt.Fprintln(e.output, "\nInput closed. Saving and closing...")
 				return nil
 			}
 
@@ -152,7 +152,7 @@ func (e *editor) run(input io.Reader, signals <-chan os.Signal) error {
 				continue
 			}
 			if exit {
-				fmt.Fprintln(e.output, "Guardando y cerrando...")
+				fmt.Fprintln(e.output, "Saving and closing...")
 				return nil
 			}
 		}
@@ -168,23 +168,23 @@ func (e *editor) execute(line string) (bool, error) {
 	switch strings.ToLower(fields[0]) {
 	case "print":
 		if len(fields) != 1 {
-			return false, errors.New("uso: print")
+			return false, errors.New("usage: print")
 		}
 		e.printDocument()
 		return false, nil
 
 	case "insert":
 		if len(fields) != 3 {
-			return false, errors.New("uso: insert <index> <char>")
+			return false, errors.New("usage: insert <index> <char>")
 		}
 
 		index, err := strconv.Atoi(fields[1])
 		if err != nil {
-			return false, fmt.Errorf("índice inválido %q", fields[1])
+			return false, fmt.Errorf("invalid index %q", fields[1])
 		}
 		characters := []rune(fields[2])
 		if len(characters) != 1 {
-			return false, errors.New("<char> debe contener exactamente un carácter")
+			return false, errors.New("<char> must contain exactly one character")
 		}
 		character := characters[0]
 
@@ -192,64 +192,64 @@ func (e *editor) execute(line string) (bool, error) {
 			return false, err
 		}
 		if err := e.storage.SaveSnapshot(e.document); err != nil {
-			return false, fmt.Errorf("el insert se aplicó en memoria, pero no pudo persistirse: %w", err)
+			return false, fmt.Errorf("insert was applied in memory, but could not be persisted: %w", err)
 		}
-		fmt.Fprintf(e.output, "Insertado %q en el índice %d.\n", character, index)
+		fmt.Fprintf(e.output, "Inserted %q at index %d.\n", character, index)
 		return false, nil
 
 	case "delete":
 		if len(fields) != 2 {
-			return false, errors.New("uso: delete <index>")
+			return false, errors.New("usage: delete <index>")
 		}
 
 		index, err := strconv.Atoi(fields[1])
 		if err != nil {
-			return false, fmt.Errorf("índice inválido %q", fields[1])
+			return false, fmt.Errorf("invalid index %q", fields[1])
 		}
-		if err := e.document.Delete(index); err != nil {
+		if err, _ := e.document.Delete(index); err != nil {
 			return false, err
 		}
 		if err := e.storage.SaveSnapshot(e.document); err != nil {
-			return false, fmt.Errorf("el delete se aplicó en memoria, pero no pudo persistirse: %w", err)
+			return false, fmt.Errorf("delete was applied in memory, but could not be persisted: %w", err)
 		}
-		fmt.Fprintf(e.output, "Eliminado el elemento visible del índice %d.\n", index)
+		fmt.Fprintf(e.output, "Deleted the visible element at index %d.\n", index)
 		return false, nil
 
 	case "save":
 		if len(fields) != 1 {
-			return false, errors.New("uso: save")
+			return false, errors.New("usage: save")
 		}
 		if err := e.storage.SaveSnapshot(e.document); err != nil {
-			return false, fmt.Errorf("guardar snapshot: %w", err)
+			return false, fmt.Errorf("save snapshot: %w", err)
 		}
-		fmt.Fprintln(e.output, "Snapshot guardado.")
+		fmt.Fprintln(e.output, "Snapshot saved.")
 		return false, nil
 
 	case "state":
 		if len(fields) != 1 {
-			return false, errors.New("uso: state")
+			return false, errors.New("usage: state")
 		}
 		e.printState()
 		return false, nil
 
 	case "exit":
 		if len(fields) != 1 {
-			return false, errors.New("uso: exit")
+			return false, errors.New("usage: exit")
 		}
 		return true, nil
 
 	case "help":
-		fmt.Fprintln(e.output, "Comandos: print, insert <index> <char>, delete <index>, save, state, exit")
+		fmt.Fprintln(e.output, "Commands: print, insert <index> <char>, delete <index>, save, state, exit")
 		return false, nil
 
 	default:
-		return false, fmt.Errorf("comando desconocido %q", fields[0])
+		return false, fmt.Errorf("unknown command %q", fields[0])
 	}
 }
 
 func (e *editor) printDocument() {
 	fmt.Fprintf(e.output, "Visible:  %q\n", e.document.VisibleContent())
-	fmt.Fprintf(e.output, "Interno:  %s\n", e.document.PrintInternal())
+	fmt.Fprintf(e.output, "Internal: %s\n", e.document.PrintInternal())
 }
 
 func (e *editor) printState() {

@@ -70,7 +70,7 @@ func TestSnapshotRoundTripBasic(t *testing.T) {
 	idB := insertRune(t, original, 'B')
 	idC := insertRune(t, original, 'C')
 
-	if err := original.Delete(1); err != nil {
+	if err, _ := original.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
 	}
 

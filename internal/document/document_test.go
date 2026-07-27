@@ -116,7 +116,7 @@ func TestDeleteVisibleElement(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
 
-	if err := document.Delete(1); err != nil {
+	if err, _ := document.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestDeleteLastVisibleElement(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
 
-	if err := document.Delete(4); err != nil {
+	if err, _ := document.Delete(4); err != nil {
 		t.Fatalf("Delete(4) returned an unexpected error: %v", err)
 	}
 
@@ -170,7 +170,7 @@ func TestInsertAfterTombstone(t *testing.T) {
 	document := NewDocument()
 	insertText(t, document, "Hello")
 
-	if err := document.Delete(1); err != nil {
+	if err, _ := document.Delete(1); err != nil {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
 	}
 
@@ -209,25 +209,25 @@ func TestInsertAfterTombstone(t *testing.T) {
 func TestInvalidIndexes(t *testing.T) {
 	tests := []struct {
 		name      string
-		operation func(document *Document) error
+		operation func(document *Document) (error, identifier.ID)
 	}{
 		{
 			name: "delete with a negative index",
-			operation: func(document *Document) error {
+			operation: func(document *Document) (error, identifier.ID) {
 				return document.Delete(-1)
 			},
 		},
 		{
 			name: "delete with an out-of-range index",
-			operation: func(document *Document) error {
+			operation: func(document *Document) (error, identifier.ID) {
 				return document.Delete(100)
 			},
 		},
 		{
 			name: "insert with an out-of-range index",
-			operation: func(document *Document) error {
+			operation: func(document *Document) (error, identifier.ID) {
 				err, _ := document.InsertElement(100, 'X')
-				return err
+				return err, identifier.ID{}
 			},
 		},
 	}
@@ -241,7 +241,7 @@ func TestInvalidIndexes(t *testing.T) {
 			beforeLength := document.VisibleLength()
 			beforeInternal := document.PrintInternal()
 
-			err := test.operation(document)
+			err, _ := test.operation(document)
 			if err == nil {
 				t.Fatal("Expected an error, but the operation returned nil")
 			}
