@@ -1,6 +1,6 @@
 package protocol
 
 type Delta struct {
-	Inserts []*InsertOperation
-	Deletes []*DeleteOperation
+	Inserts []*InsertOperation `json:"inserts"`
+	Deletes []*DeleteOperation `json:"deletes"`
 }

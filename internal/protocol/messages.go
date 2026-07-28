@@ -84,14 +84,14 @@ type DeleteOp struct {
 }
 
 type SyncOp1 struct {
-	Type        string `json:"type"`
-	VectorState json.RawMessage/* true value : map[identifier.ID]*InsertOperation*/ `json:"vector_state"`
-	DeleteSet   json.RawMessage/* true value : map[identifier.ID]*DeleteOperation*/ `json:"delete_set"`
+	Type        string           `json:"type"`
+	VectorState map[string]int   `json:"vector_state"`
+	DeleteSet   map[string][]int `json:"delete_set"`
 }
 
 type SyncOp2 struct {
 	Type  string `json:"type"`
-	Delta json.RawMessage/* true value : *Delta*/ `json:"delta"`
+	Delta *Delta `json:"delta"`
 }
 
 func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
@@ -310,11 +310,11 @@ func DecodeSync1(payloadSync1 UpdatePayload) error {
 		return err
 	}
 
-	if len(sync1Bytes.VectorState) == 0 {
+	if sync1Bytes.VectorState == nil {
 		return errors.New("missing_field")
 	}
 
-	if len(sync1Bytes.DeleteSet) == 0 {
+	if sync1Bytes.DeleteSet == nil {
 		return errors.New("missing_field")
 	}
 
@@ -331,7 +331,7 @@ func DecodeSync2(payloadSync2 UpdatePayload) error {
 		return err
 	}
 
-	if len(sync2Bytes.Delta) == 0 {
+	if sync2Bytes.Delta == nil {
 		return errors.New("missing_field")
 	}
 

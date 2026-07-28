@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
 )
 
-func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync.Mutex) {
+func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync.Mutex, writeMutex *sync.Mutex) {
 
 	for {
 
@@ -46,25 +47,114 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync
 			continue
 		}
 
-		convertedOperation, errConversion := internalSync.ConvertUpdateOperation(updatePayload)
+		var operationEnvelope protocol.OperationEnvelope
 
-		if errConversion != nil {
-			fmt.Println(errConversion)
+		errOpEnvelope := json.Unmarshal(updatePayload.Operation, &operationEnvelope)
+
+		if errOpEnvelope != nil {
+			fmt.Println(errOpEnvelope)
 			continue
 		}
 
-		mutex.Lock()
+		switch operationEnvelope.Type {
+		case protocol.OpInsert, protocol.OpDelete:
+			convertedOperation, errConversion := internalSync.ConvertUpdateOperation(updatePayload)
 
-		errApply := internalSync.ApplyConvertedOperation(doc, convertedOperation)
+			if errConversion != nil {
+				fmt.Println(errConversion)
+				continue
+			}
 
-		if errApply != nil {
-			fmt.Println(errApply)
+			mutex.Lock()
+
+			errApply := internalSync.ApplyConvertedOperation(doc, convertedOperation)
+
+			if errApply != nil {
+				fmt.Println(errApply)
+				mutex.Unlock()
+				continue
+			}
+
+			fmt.Println(doc.String())
+
 			mutex.Unlock()
+		case protocol.OpSync1:
+			fmt.Println("received sync_step1")
+			var sync1Operation protocol.SyncOp1
+
+			err := json.Unmarshal(updatePayload.Operation, &sync1Operation)
+
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			remoteVector := internalSync.Vector{
+				StateVectors: sync1Operation.VectorState,
+				DeleteSet:    sync1Operation.DeleteSet,
+			}
+
+			mutex.Lock()
+
+			missingInserts, missingDeletes := internalSync.ComputeDelta(*doc, remoteVector)
+			delta := internalSync.ComputeSerializedDelta(*doc, missingInserts, missingDeletes)
+
+			mutex.Unlock()
+
+			envelope, errEnvelope := internalSync.EncodeSyncStep2(delta)
+
+			if errEnvelope != nil {
+				fmt.Println(errEnvelope)
+				continue
+			}
+
+			writeMutex.Lock()
+
+			errSend := conn.WriteMessage(websocket.TextMessage, envelope)
+			if errSend != nil {
+				fmt.Println(errSend)
+				writeMutex.Unlock()
+				continue
+			}
+
+			writeMutex.Unlock()
+
+		case protocol.OpSync2:
+			fmt.Println("received sync_step2")
+
+			var sync2Operation protocol.SyncOp2
+
+			err := json.Unmarshal(updatePayload.Operation, &sync2Operation)
+
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			if sync2Operation.Delta == nil {
+				fmt.Println("missing field")
+				continue
+			}
+
+			mutex.Lock()
+
+			errDelta := doc.IntegrateDelta(*sync2Operation.Delta)
+
+			if errDelta != nil {
+				fmt.Println(errDelta)
+				mutex.Unlock()
+				continue
+			}
+
+			docContent := doc.String()
+
+			mutex.Unlock()
+
+			fmt.Println(docContent)
+
+		default:
+			fmt.Println("unsupported operation")
 			continue
 		}
-
-		fmt.Println(doc.String())
-
-		mutex.Unlock()
 	}
 }

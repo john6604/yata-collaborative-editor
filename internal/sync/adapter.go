@@ -212,6 +212,82 @@ func EncodeDeleteOperation(deleteOp protocol.DeleteOperation) ([]byte, error) {
 	return envelopeBytes, nil
 }
 
+func EncodeSyncStep1(vector Vector) ([]byte, error) {
+
+	sync1Operation := protocol.SyncOp1{
+		Type:        protocol.OpSync1,
+		VectorState: vector.StateVectors,
+		DeleteSet:   vector.DeleteSet,
+	}
+
+	sync1Envelope, errSync1 := json.Marshal(sync1Operation)
+
+	if errSync1 != nil {
+		return nil, errSync1
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: sync1Envelope,
+	}
+
+	updateEnvelope, errUpdate := json.Marshal(updatePayload)
+
+	if errUpdate != nil {
+		return nil, errUpdate
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+	envelopeBytes, errEnvelope := json.Marshal(envelope)
+
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	return envelopeBytes, nil
+}
+
+func EncodeSyncStep2(delta protocol.Delta) ([]byte, error) {
+
+	sync2Operation := protocol.SyncOp2{
+		Type:  protocol.OpSync2,
+		Delta: &delta,
+	}
+
+	sync2Envelope, errSync2 := json.Marshal(sync2Operation)
+
+	if errSync2 != nil {
+		return nil, errSync2
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: sync2Envelope,
+	}
+
+	updateEnvelope, errUpdate := json.Marshal(updatePayload)
+
+	if errUpdate != nil {
+		return nil, errUpdate
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+
+	envelopeBytes, errEnvelope := json.Marshal(envelope)
+
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	return envelopeBytes, nil
+}
+
 func EncodeUpdateOperation(convertedOperation ConvertedOperation) ([]byte, error) {
 
 	var operation []byte

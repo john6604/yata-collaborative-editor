@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,14 +17,16 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/client"
 	"github.com/john6604/yata-collaborative-editor/internal/document"
+	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
 )
 
 type wsEditor struct {
-	document *document.Document
-	conn     *websocket.Conn
-	mutex    *sync.Mutex
-	output   io.Writer
+	document   *document.Document
+	conn       *websocket.Conn
+	mutex      *sync.Mutex
+	writeMutex *sync.Mutex
+	output     io.Writer
 }
 
 func main() {
@@ -31,14 +34,30 @@ func main() {
 }
 
 func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
+
 	flags := flag.NewFlagSet("wsclient", flag.ContinueOnError)
 	flags.SetOutput(errorOutput)
+
+	server := flags.String("server", "ws://localhost:8181/ws", "Server")
+	room := flags.String("room", "room-1", "Room")
+	clientFlag := flags.String("client", "client-B", "Client")
+
+	errFlag := flags.Parse(args)
+
+	if errFlag != nil {
+		return 2
+	}
 
 	doc := document.NewDocument()
 
 	var mutexDoc sync.Mutex
+	var writeMutex sync.Mutex
 
-	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8181/ws", nil)
+	if *server == "" || *room == "" || *clientFlag == "" {
+		return 2
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(*server, nil)
 
 	if err != nil {
 		fmt.Fprintf(errorOutput, "wsclient finished with error: %v\n", err)
@@ -49,7 +68,30 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 
 	defer conn.Close()
 
-	jsonStr := `{"version":1,"type":"join","payload":{"room":"room-1","client_id":"client-B"}}`
+	msg := protocol.JoinPayload{
+		RoomID:   *room,
+		ClientID: *clientFlag,
+	}
+
+	joinBytes, errJoin := json.Marshal(msg)
+
+	if errJoin != nil {
+		return 1
+	}
+
+	joinMsg := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeJoin,
+		Payload:     joinBytes,
+	}
+
+	envelopeBytes, errEnvelope := json.Marshal(joinMsg)
+
+	if errEnvelope != nil {
+		return 1
+	}
+
+	jsonStr := string(envelopeBytes)
 	data := []byte(jsonStr)
 
 	errSend := conn.WriteMessage(websocket.TextMessage, data)
@@ -66,14 +108,40 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		return 1
 	}
 
-	fmt.Fprintf(output, "Joined room-1 as client-B.\n")
+	fmt.Fprintf(output, "Joined %s as %s.\n", *room, *clientFlag)
 	fmt.Fprintln(output, "Commands: help, print, insert <index> <char>, exit")
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
-	repl := &wsEditor{document: doc, conn: conn, mutex: &mutexDoc, output: output}
-	go client.RemoteMessageLoop(doc, conn, &mutexDoc)
+	repl := &wsEditor{document: doc, conn: conn, mutex: &mutexDoc, writeMutex: &writeMutex, output: output}
+	go client.RemoteMessageLoop(doc, conn, &mutexDoc, &writeMutex)
+
+	var vector internalSync.Vector
+
+	mutexDoc.Lock()
+
+	vector.GenerateStateVector(*doc)
+	vector.GenerateDeleteSet(*doc)
+
+	mutexDoc.Unlock()
+
+	sync1, errSync1 := internalSync.EncodeSyncStep1(vector)
+
+	if errSync1 != nil {
+		return 1
+	}
+
+	writeMutex.Lock()
+
+	errSendSync := conn.WriteMessage(websocket.TextMessage, sync1)
+
+	writeMutex.Unlock()
+
+	if errSendSync != nil {
+		return 1
+	}
+
 	errREPL := repl.run(input, signals)
 
 	signal.Stop(signals)
@@ -196,7 +264,11 @@ func (editor *wsEditor) execute(line string) (bool, error) {
 			return false, errors.New("operation failed to encode")
 		}
 
+		editor.writeMutex.Lock()
+
 		errSend := editor.conn.WriteMessage(websocket.TextMessage, encodedOperation)
+
+		editor.writeMutex.Unlock()
 
 		if errSend != nil {
 			return false, errors.New("operation failed to send through websocket")
@@ -243,7 +315,11 @@ func (editor *wsEditor) execute(line string) (bool, error) {
 			return false, errors.New("operation failed to encode")
 		}
 
+		editor.writeMutex.Lock()
+
 		errSend := editor.conn.WriteMessage(websocket.TextMessage, encodedOperation)
+
+		editor.writeMutex.Unlock()
 
 		if errSend != nil {
 			return false, errors.New("operation failed to send through websocket")
