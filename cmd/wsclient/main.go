@@ -115,7 +115,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	repl := &wsEditor{document: doc, conn: conn, mutex: &mutexDoc, writeMutex: &writeMutex, output: output}
-	go client.RemoteMessageLoop(doc, conn, &mutexDoc, &writeMutex)
+	go client.RemoteMessageLoop(conn)
 
 	var vector internalSync.Vector
 

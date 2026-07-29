@@ -115,12 +115,20 @@ func (client *CollaborativeClient) SendOrQueue(message []byte) error {
 		return errors.New("empty message")
 	}
 
-	conn, state := client.ConnectionSnapshot()
+	messageCopy := append([]byte(nil), message...)
+
+	client.ConnMutex.Lock()
+
+	conn := client.Conn
+	state := client.State
 
 	if state != StateOnline || conn == nil {
-		client.EnqueueOffline(message)
+		client.OfflineQueue = append(client.OfflineQueue, messageCopy)
+		client.ConnMutex.Unlock()
 		return nil
 	}
+
+	client.ConnMutex.Unlock()
 
 	client.WriteMutex.Lock()
 	errSend := conn.WriteMessage(websocket.TextMessage, message)
@@ -163,6 +171,61 @@ func (client *CollaborativeClient) MarkDisconnected(conn *websocket.Conn) {
 	}
 }
 
+func (client *CollaborativeClient) MarkOnline(conn *websocket.Conn) bool {
+
+	if conn == nil {
+		return false
+	}
+
+	online := false
+
+	client.ConnMutex.Lock()
+
+	if client.Conn == conn && client.State == StateSyncing {
+		client.State = StateOnline
+		online = true
+	}
+
+	client.ConnMutex.Unlock()
+
+	return online
+}
+
+func (client *CollaborativeClient) SendSync1(conn *websocket.Conn) error {
+
+	if conn == nil {
+		return errors.New("no existing connection")
+	}
+
+	var vector internalSync.Vector
+
+	client.DocMutex.Lock()
+
+	vector.GenerateStateVector(*client.Doc)
+	vector.GenerateDeleteSet(*client.Doc)
+
+	client.DocMutex.Unlock()
+
+	sync1, errSync1 := internalSync.EncodeSyncStep1(vector)
+
+	if errSync1 != nil {
+		return errSync1
+	}
+
+	client.WriteMutex.Lock()
+
+	errSend := conn.WriteMessage(websocket.TextMessage, sync1)
+
+	client.WriteMutex.Unlock()
+
+	if errSend != nil {
+		client.MarkDisconnected(conn)
+		return errSend
+	}
+
+	return nil
+}
+
 func (client *CollaborativeClient) RequestReconnect() {
 
 	ch := client.ReconnectSignal
@@ -199,11 +262,20 @@ func (client *CollaborativeClient) ReconnectLoop() {
 		case <-client.ReconnectSignal:
 			beginReconnect := client.BeginReconnect()
 			if beginReconnect {
-				_, err := client.ReconnectOnce()
+				conn, err := client.ReconnectOnce()
 				if err != nil {
 					fmt.Println(err)
 				} else {
+					go client.RemoteMessageLoop(conn)
 					fmt.Println("Reconnected and joined...")
+
+					errSync := client.SendSync1(conn)
+					if errSync != nil {
+						fmt.Println(errSync)
+						continue
+					}
+
+					fmt.Println("Joined and syncing...")
 				}
 			}
 		case <-client.StopSignal:
@@ -342,13 +414,72 @@ func (client *CollaborativeClient) ReconnectOnce() (*websocket.Conn, error) {
 	return conn, nil
 }
 
-func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync.Mutex, writeMutex *sync.Mutex) {
+func (client *CollaborativeClient) FlushOfflineQueue(conn *websocket.Conn) {
+
+	if conn == nil {
+		return
+	}
+
+	for {
+
+		client.ConnMutex.Lock()
+		if client.Conn != conn {
+			client.ConnMutex.Unlock()
+			return
+		}
+
+		if client.State != StateSyncing {
+			client.ConnMutex.Unlock()
+			return
+		}
+
+		if len(client.OfflineQueue) == 0 {
+			client.State = StateOnline
+			client.ConnMutex.Unlock()
+			return
+		}
+
+		copyMessage := append([]byte(nil), client.OfflineQueue[0]...)
+		client.ConnMutex.Unlock()
+
+		client.WriteMutex.Lock()
+
+		errSend := conn.WriteMessage(websocket.TextMessage, copyMessage)
+
+		client.WriteMutex.Unlock()
+
+		if errSend != nil {
+			fmt.Println(errSend)
+			client.MarkDisconnected(conn)
+			return
+		}
+
+		client.ConnMutex.Lock()
+
+		if client.Conn != conn {
+			client.ConnMutex.Unlock()
+			return
+		}
+
+		if client.State != StateSyncing {
+			client.ConnMutex.Unlock()
+			return
+		}
+
+		client.OfflineQueue = client.OfflineQueue[1:]
+
+		client.ConnMutex.Unlock()
+	}
+}
+
+func (client *CollaborativeClient) RemoteMessageLoop(conn *websocket.Conn) {
 
 	for {
 
 		messageType, message, errMessage := conn.ReadMessage()
 
 		if errMessage != nil {
+			client.MarkDisconnected(conn)
 			break
 		}
 
@@ -396,19 +527,19 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync
 				continue
 			}
 
-			mutex.Lock()
+			client.DocMutex.Lock()
 
-			errApply := internalSync.ApplyConvertedOperation(doc, convertedOperation)
+			errApply := internalSync.ApplyConvertedOperation(client.Doc, convertedOperation)
 
 			if errApply != nil {
 				fmt.Println(errApply)
-				mutex.Unlock()
+				client.DocMutex.Unlock()
 				continue
 			}
 
-			fmt.Println(doc.String())
+			fmt.Println(client.Doc.String())
 
-			mutex.Unlock()
+			client.DocMutex.Unlock()
 		case protocol.OpSync1:
 			fmt.Println("received sync_step1")
 			var sync1Operation protocol.SyncOp1
@@ -425,12 +556,12 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync
 				DeleteSet:    sync1Operation.DeleteSet,
 			}
 
-			mutex.Lock()
+			client.DocMutex.Lock()
 
-			missingInserts, missingDeletes := internalSync.ComputeDelta(*doc, remoteVector)
-			delta := internalSync.ComputeSerializedDelta(*doc, missingInserts, missingDeletes)
+			missingInserts, missingDeletes := internalSync.ComputeDelta(*client.Doc, remoteVector)
+			delta := internalSync.ComputeSerializedDelta(*client.Doc, missingInserts, missingDeletes)
 
-			mutex.Unlock()
+			client.DocMutex.Unlock()
 
 			envelope, errEnvelope := internalSync.EncodeSyncStep2(delta)
 
@@ -439,16 +570,17 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync
 				continue
 			}
 
-			writeMutex.Lock()
+			client.WriteMutex.Lock()
 
 			errSend := conn.WriteMessage(websocket.TextMessage, envelope)
+
+			client.WriteMutex.Unlock()
+
 			if errSend != nil {
 				fmt.Println(errSend)
-				writeMutex.Unlock()
-				continue
+				client.MarkDisconnected(conn)
+				return
 			}
-
-			writeMutex.Unlock()
 
 		case protocol.OpSync2:
 			fmt.Println("received sync_step2")
@@ -467,21 +599,23 @@ func RemoteMessageLoop(doc *document.Document, conn *websocket.Conn, mutex *sync
 				continue
 			}
 
-			mutex.Lock()
+			client.DocMutex.Lock()
 
-			errDelta := doc.IntegrateDelta(*sync2Operation.Delta)
+			errDelta := client.Doc.IntegrateDelta(*sync2Operation.Delta)
 
 			if errDelta != nil {
 				fmt.Println(errDelta)
-				mutex.Unlock()
+				client.DocMutex.Unlock()
 				continue
 			}
 
-			docContent := doc.String()
+			docContent := client.Doc.String()
 
-			mutex.Unlock()
+			client.DocMutex.Unlock()
 
 			fmt.Println(docContent)
+
+			client.SetConnection(conn, StateOnline)
 
 		default:
 			fmt.Println("unsupported operation")
