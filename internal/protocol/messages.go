@@ -192,6 +192,33 @@ func DecodeJoin(message json.RawMessage) (string, string, error) {
 	return formattedRoomID, formattedClientID, nil
 }
 
+func DecodeJoinAck(message json.RawMessage) (string, string, error) {
+
+	var joinPayload JoinAckPayload
+
+	err := json.Unmarshal(message, &joinPayload)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	roomID := joinPayload.Room
+	clientID := joinPayload.ClientID
+
+	formattedRoomID := strings.TrimSpace(roomID)
+	formattedClientID := strings.TrimSpace(clientID)
+
+	if formattedClientID == "" {
+		return "", "", errors.New("Client ID is empty.")
+	}
+
+	if formattedRoomID == "" {
+		return "", "", errors.New("Room is empty.")
+	}
+
+	return formattedRoomID, formattedClientID, nil
+}
+
 func EncodeJoinAck(room string, clientID string) ([]byte, error) {
 
 	joinAckPayload := JoinAckPayload{
