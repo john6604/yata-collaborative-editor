@@ -149,10 +149,10 @@ func (h *Hub) HasClient(roomID string, clientID string) (bool, error) {
 	return clientExists, nil
 }
 
-func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) error {
+func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) (bool, error) {
 
 	if senderSession == nil {
-		return ErrNotJoined
+		return false, ErrNotJoined
 	}
 
 	h.mutex.RLock()
@@ -161,19 +161,19 @@ func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) erro
 
 	if !roomExists {
 		h.mutex.RUnlock()
-		return ErrNotJoined
+		return false, ErrNotJoined
 	}
 
 	storedSession, sessionExists := room.clients[senderSession.clientID]
 
 	if !sessionExists {
 		h.mutex.RUnlock()
-		return ErrNotJoined
+		return false, ErrNotJoined
 	}
 
 	if storedSession != senderSession {
 		h.mutex.RUnlock()
-		return ErrNotJoined
+		return false, ErrNotJoined
 	}
 
 	var receivers []*ClientSession
@@ -186,14 +186,18 @@ func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) erro
 
 	h.mutex.RUnlock()
 
+	if len(receivers) == 0 {
+		return false, nil
+	}
+
 	for _, client := range receivers {
 
 		errSend := client.Send(message)
 
 		if errSend != nil {
-			return errSend
+			return false, errSend
 		}
 	}
 
-	return nil
+	return true, nil
 }

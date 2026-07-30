@@ -42,6 +42,8 @@ type CollaborativeClient struct {
 	ReconnectSignal chan struct{}
 	StopSignal      chan struct{}
 	StopOnce        sync.Once
+
+	FlushMutex sync.Mutex
 }
 
 func NewCollaborativeClient(serverURL string, roomID string, clientID string) (*CollaborativeClient, error) {
@@ -416,6 +418,9 @@ func (client *CollaborativeClient) ReconnectOnce() (*websocket.Conn, error) {
 
 func (client *CollaborativeClient) FlushOfflineQueue(conn *websocket.Conn) {
 
+	client.FlushMutex.Lock()
+	defer client.FlushMutex.Unlock()
+
 	if conn == nil {
 		return
 	}
@@ -615,7 +620,7 @@ func (client *CollaborativeClient) RemoteMessageLoop(conn *websocket.Conn) {
 
 			fmt.Println(docContent)
 
-			client.SetConnection(conn, StateOnline)
+			client.FlushOfflineQueue(conn)
 
 		default:
 			fmt.Println("unsupported operation")

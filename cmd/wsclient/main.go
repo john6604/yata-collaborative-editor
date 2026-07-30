@@ -48,13 +48,16 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		return 2
 	}
 
-	doc := document.NewDocument()
-
-	var mutexDoc sync.Mutex
-	var writeMutex sync.Mutex
-
 	if *server == "" || *room == "" || *clientFlag == "" {
 		return 2
+	}
+
+	var clientCollaborative *client.CollaborativeClient
+
+	clientCollaborative, errClient := client.NewCollaborativeClient(*server, *room, *clientFlag)
+
+	if errClient != nil {
+		return 1
 	}
 
 	conn, _, err := websocket.DefaultDialer.Dial(*server, nil)
@@ -63,6 +66,8 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		fmt.Fprintf(errorOutput, "wsclient finished with error: %v\n", err)
 		return 1
 	}
+
+	clientCollaborative.SetConnection(conn, client.StateConnecting)
 
 	fmt.Fprintf(output, "Connected to relay server...\n")
 
@@ -114,17 +119,19 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
-	repl := &wsEditor{document: doc, conn: conn, mutex: &mutexDoc, writeMutex: &writeMutex, output: output}
-	go client.RemoteMessageLoop(conn)
+	clientCollaborative.SetConnection(conn, client.StateSyncing)
+
+	repl := &wsEditor{document: clientCollaborative.Doc, conn: conn, mutex: &clientCollaborative.DocMutex, writeMutex: &clientCollaborative.WriteMutex, output: output}
+	go clientCollaborative.RemoteMessageLoop(conn)
 
 	var vector internalSync.Vector
 
-	mutexDoc.Lock()
+	clientCollaborative.DocMutex.Lock()
 
-	vector.GenerateStateVector(*doc)
-	vector.GenerateDeleteSet(*doc)
+	vector.GenerateStateVector(*clientCollaborative.Doc)
+	vector.GenerateDeleteSet(*clientCollaborative.Doc)
 
-	mutexDoc.Unlock()
+	clientCollaborative.DocMutex.Unlock()
 
 	sync1, errSync1 := internalSync.EncodeSyncStep1(vector)
 
@@ -132,17 +139,17 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		return 1
 	}
 
-	writeMutex.Lock()
+	clientCollaborative.WriteMutex.Lock()
 
 	errSendSync := conn.WriteMessage(websocket.TextMessage, sync1)
 
-	writeMutex.Unlock()
+	clientCollaborative.WriteMutex.Unlock()
 
 	if errSendSync != nil {
 		return 1
 	}
 
-	errREPL := repl.run(input, signals)
+	errREPL := repl.run(input, signals, clientCollaborative)
 
 	signal.Stop(signals)
 
@@ -155,7 +162,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	return exitCode
 }
 
-func (editor *wsEditor) run(input io.Reader, signals <-chan os.Signal) error {
+func (editor *wsEditor) run(input io.Reader, signals <-chan os.Signal, client *client.CollaborativeClient) error {
 	lines := make(chan string)
 	scannResult := make(chan error, 1)
 
@@ -185,7 +192,7 @@ func (editor *wsEditor) run(input io.Reader, signals <-chan os.Signal) error {
 				return nil
 			}
 
-			exit, err := editor.execute(line)
+			exit, err := editor.execute(line, client)
 
 			if err != nil {
 				fmt.Fprintf(editor.output, "error: %v\n", err)
@@ -200,7 +207,7 @@ func (editor *wsEditor) run(input io.Reader, signals <-chan os.Signal) error {
 	}
 }
 
-func (editor *wsEditor) execute(line string) (bool, error) {
+func (editor *wsEditor) execute(line string, client *client.CollaborativeClient) (bool, error) {
 	fields := strings.Fields(strings.TrimSpace(line))
 
 	if len(fields) == 0 {
@@ -264,11 +271,7 @@ func (editor *wsEditor) execute(line string) (bool, error) {
 			return false, errors.New("operation failed to encode")
 		}
 
-		editor.writeMutex.Lock()
-
-		errSend := editor.conn.WriteMessage(websocket.TextMessage, encodedOperation)
-
-		editor.writeMutex.Unlock()
+		errSend := client.SendOrQueue(encodedOperation)
 
 		if errSend != nil {
 			return false, errors.New("operation failed to send through websocket")
@@ -315,11 +318,7 @@ func (editor *wsEditor) execute(line string) (bool, error) {
 			return false, errors.New("operation failed to encode")
 		}
 
-		editor.writeMutex.Lock()
-
-		errSend := editor.conn.WriteMessage(websocket.TextMessage, encodedOperation)
-
-		editor.writeMutex.Unlock()
+		errSend := client.SendOrQueue(encodedOperation)
 
 		if errSend != nil {
 			return false, errors.New("operation failed to send through websocket")

@@ -1,11 +1,14 @@
 package relay
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
+	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
 )
 
 func run(response http.ResponseWriter, request *http.Request) {
@@ -107,14 +110,30 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		switch typeMessage {
 		case protocol.TypeUpdate:
 
-			_, errPayload := protocol.DecodeUpdate(bytes)
+			update, errPayload := protocol.DecodeUpdate(bytes)
 
 			if errPayload != nil {
 				SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
 				continue
 			}
 
-			err := rs.hub.BroadcastToRoom(session, message)
+			var operationEnvelope protocol.OperationEnvelope
+
+			errDecode := json.Unmarshal(update.Operation, &operationEnvelope)
+
+			if errDecode != nil {
+				SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
+				continue
+			}
+
+			formattedType := strings.TrimSpace(operationEnvelope.Type)
+
+			if len(formattedType) == 0 {
+				SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
+				continue
+			}
+
+			receiversExist, err := rs.hub.BroadcastToRoom(session, message)
 
 			if err != nil {
 				if err == ErrNotJoined {
@@ -123,6 +142,26 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 					SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
 				}
 				continue
+			}
+
+			if !receiversExist {
+				if formattedType == protocol.OpSync1 {
+
+					var delta protocol.Delta
+
+					sync2, errSync2 := internalSync.EncodeSyncStep2(delta)
+
+					if errSync2 != nil {
+						SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+						continue
+					}
+
+					errSender := session.Send(sync2)
+
+					if errSender != nil {
+						return
+					}
+				}
 			}
 			continue
 		default:
