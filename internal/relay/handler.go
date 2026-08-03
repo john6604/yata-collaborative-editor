@@ -91,15 +91,14 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 
 	ackBytes, errAck := protocol.EncodeJoinAck(room, client)
 	if errAck != nil {
-		SendErrorMessage(
+		session.SendErrorMessage(
 			protocol.InternalError,
 			protocol.InternalErrorMessage,
-			conn,
 		)
 		return
 	}
 
-	errSend := conn.WriteMessage(websocket.TextMessage, ackBytes)
+	errSend := session.Send(ackBytes)
 	if errSend != nil {
 		return
 	}
@@ -111,30 +110,36 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		}
 
 		if messageType != websocket.TextMessage {
-			SendErrorMessage(
+			errSend := session.SendErrorMessage(
 				protocol.ExpectedMessageCode,
 				protocol.ExpectedMessage,
-				conn,
 			)
+			if errSend != nil {
+				return
+			}
 			break
 		}
 
 		version, typeMessage, payload, errEnvelope := protocol.DecodeEnvelope(message)
 		if errEnvelope != nil {
-			SendErrorMessage(
+			errSend := session.SendErrorMessage(
 				protocol.InvalidPayload,
 				protocol.InvalidPayloadMessage,
-				conn,
 			)
+			if errSend != nil {
+				return
+			}
 			continue
 		}
 
 		if version != protocol.SupportedVersion {
-			SendErrorMessage(
+			errSend := session.SendErrorMessage(
 				protocol.UnsupportedVersion,
 				protocol.UnsupportedVersionMessage,
-				conn,
 			)
+			if errSend != nil {
+				return
+			}
 			continue
 		}
 
@@ -142,11 +147,13 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		case protocol.TypeUpdate:
 			update, errPayload := protocol.DecodeUpdate(payload)
 			if errPayload != nil {
-				SendErrorMessage(
+				errSend := session.SendErrorMessage(
 					protocol.InvalidPayload,
 					protocol.InvalidPayloadMessage,
-					conn,
 				)
+				if errSend != nil {
+					return
+				}
 				continue
 			}
 
@@ -157,34 +164,44 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 				&operationEnvelope,
 			)
 			if errDecode != nil {
-				SendErrorMessage(
+				errSend := session.SendErrorMessage(
 					protocol.InvalidPayload,
 					protocol.InvalidPayloadMessage,
-					conn,
 				)
+				if errSend != nil {
+					return
+				}
 				continue
 			}
 
 			formattedType := strings.TrimSpace(operationEnvelope.Type)
 			if formattedType == "" {
-				SendErrorMessage(
+				errSend := session.SendErrorMessage(
 					protocol.InvalidPayload,
 					protocol.InvalidPayloadMessage,
-					conn,
 				)
+				if errSend != nil {
+					return
+				}
 				continue
 			}
 
 			if formattedType == protocol.OpSnapshot {
 				snapshot, errSnapshot := protocol.DecodeSnapshot(update)
 				if errSnapshot != nil {
-					SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage, conn)
+					errSend := session.SendErrorMessage(protocol.InvalidPayload, protocol.InvalidPayloadMessage)
+					if errSend != nil {
+						return
+					}
 					continue
 				}
 				savingRoom := session.roomID
 				errDelta := rs.storage.SaveSnapshotRoom(savingRoom, *snapshot.Delta)
 				if errDelta != nil {
-					SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+					errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
+					if errSend != nil {
+						return
+					}
 					continue
 				}
 				continue
@@ -196,17 +213,21 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 			)
 			if errBroadcast != nil {
 				if errBroadcast == ErrNotJoined {
-					SendErrorMessage(
+					errSend := session.SendErrorMessage(
 						protocol.NotJoined,
 						protocol.NotJoinedMessage,
-						conn,
 					)
+					if errSend != nil {
+						return
+					}
 				} else {
-					SendErrorMessage(
+					errSend := session.SendErrorMessage(
 						protocol.InternalError,
 						protocol.InternalErrorMessage,
-						conn,
 					)
+					if errSend != nil {
+						return
+					}
 				}
 
 				continue
@@ -220,7 +241,10 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 					if errors.Is(errDelta, storage.ErrSnapshotNotFound) {
 						sync2, errSync2 := internalSync.EncodeSyncStep2(emptyDelta)
 						if errSync2 != nil {
-							SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+							errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
+							if errSend != nil {
+								return
+							}
 							continue
 						}
 
@@ -229,13 +253,19 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 						}
 						continue
 					}
-					SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+					errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
+					if errSend != nil {
+						return
+					}
 					continue
 				}
 
 				sync2, errSync2 := internalSync.EncodeSyncStep2(delta)
 				if errSync2 != nil {
-					SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage, conn)
+					errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
+					if errSend != nil {
+						return
+					}
 					continue
 				}
 
@@ -247,7 +277,10 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 			continue
 
 		default:
-			SendErrorMessage(protocol.UnknownMessageCode, protocol.UnknownMessage, conn)
+			errSend := session.SendErrorMessage(protocol.UnknownMessageCode, protocol.UnknownMessage)
+			if errSend != nil {
+				return
+			}
 			continue
 		}
 	}

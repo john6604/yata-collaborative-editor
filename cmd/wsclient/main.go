@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/client"
+	clientS "github.com/john6604/yata-collaborative-editor/internal/client"
 	"github.com/john6604/yata-collaborative-editor/internal/document"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 	internalSync "github.com/john6604/yata-collaborative-editor/internal/sync"
@@ -277,6 +278,14 @@ func (editor *wsEditor) execute(line string, client *client.CollaborativeClient)
 			return false, errors.New("operation failed to send through websocket")
 		}
 
+		state := client.GetState()
+		if state == clientS.StateOnline {
+			errSnapshot := client.SendCurrentSnapshot()
+			if errSnapshot != nil {
+				fmt.Fprintf(editor.output, "snapshot failed to send\n")
+			}
+		}
+
 		fmt.Fprintf(editor.output, "Local document: %s.\n", currentDocument)
 
 		return false, nil
@@ -322,6 +331,14 @@ func (editor *wsEditor) execute(line string, client *client.CollaborativeClient)
 
 		if errSend != nil {
 			return false, errors.New("operation failed to send through websocket")
+		}
+
+		state := client.GetState()
+		if state == clientS.StateOnline {
+			errSnapshot := client.SendCurrentSnapshot()
+			if errSnapshot != nil {
+				fmt.Fprintf(editor.output, "snapshot failed to send\n")
+			}
 		}
 
 		fmt.Fprintf(editor.output, "Local document: %s.\n", currentDocument)

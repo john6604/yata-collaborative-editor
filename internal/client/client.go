@@ -545,6 +545,20 @@ func (client *CollaborativeClient) RemoteMessageLoop(conn *websocket.Conn) {
 			fmt.Println(client.Doc.String())
 
 			client.DocMutex.Unlock()
+
+			client.ConnMutex.Lock()
+			if client.State != StateOnline || client.Conn != conn {
+				client.ConnMutex.Unlock()
+				return
+			}
+			client.ConnMutex.Unlock()
+
+			errSend := client.SendCurrentSnapshot()
+			if errSend != nil {
+				fmt.Println(errSend)
+				continue
+			}
+
 		case protocol.OpSync1:
 			fmt.Println("received sync_step1")
 			var sync1Operation protocol.SyncOp1
@@ -622,9 +636,72 @@ func (client *CollaborativeClient) RemoteMessageLoop(conn *websocket.Conn) {
 
 			client.FlushOfflineQueue(conn)
 
+			client.ConnMutex.Lock()
+			if client.State != StateOnline || client.Conn != conn {
+				client.ConnMutex.Unlock()
+				return
+			}
+			client.ConnMutex.Unlock()
+
+			errSend := client.SendCurrentSnapshot()
+			if errSend != nil {
+				fmt.Println(errSend)
+				continue
+			}
+
 		default:
 			fmt.Println("unsupported operation")
 			continue
 		}
 	}
+}
+
+func (client *CollaborativeClient) SendCurrentSnapshot() error {
+
+	var vector internalSync.Vector
+	var connection *websocket.Conn
+
+	client.ConnMutex.Lock()
+	if client.State != StateOnline || client.Conn == nil {
+		client.ConnMutex.Unlock()
+		return errors.New("client not online")
+	}
+	connection = client.Conn
+	client.ConnMutex.Unlock()
+
+	client.DocMutex.Lock()
+
+	missingInserts, missingDeletes := internalSync.ComputeDelta(*client.Doc, vector)
+	delta := internalSync.ComputeSerializedDelta(*client.Doc, missingInserts, missingDeletes)
+
+	client.DocMutex.Unlock()
+
+	data, errData := internalSync.EncodeSnapshot(delta)
+	if errData != nil {
+		return errData
+	}
+
+	client.WriteMutex.Lock()
+	client.ConnMutex.Lock()
+	if client.State != StateOnline || client.Conn == nil {
+		client.ConnMutex.Unlock()
+		client.WriteMutex.Unlock()
+		return errors.New("client not online")
+	}
+
+	if client.Conn != connection {
+		client.ConnMutex.Unlock()
+		client.WriteMutex.Unlock()
+		return errors.New("client not online")
+	}
+	client.ConnMutex.Unlock()
+	errSend := connection.WriteMessage(websocket.TextMessage, data)
+	client.WriteMutex.Unlock()
+
+	if errSend != nil {
+		client.MarkDisconnected(connection)
+		return errSend
+	}
+
+	return nil
 }
