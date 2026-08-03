@@ -13,6 +13,15 @@ type Vector struct {
 	DeleteSet    map[string][]int
 }
 
+func NewVector(stateVector map[string]int, deleteSet map[string][]int) *Vector {
+	vector := Vector{
+		StateVectors: stateVector,
+		DeleteSet:    deleteSet,
+	}
+
+	return &vector
+}
+
 func validateClockContinuity(document document.Document, idClient string, maxClock int) bool {
 
 	for i := 0; i <= maxClock; i++ {

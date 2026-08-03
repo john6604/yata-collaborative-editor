@@ -2,7 +2,9 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/john6604/yata-collaborative-editor/internal/document"
@@ -12,8 +14,34 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+var ErrSnapshotNotFound error = errors.New("Snapshot not found")
+
 type Storage struct {
 	db *bolt.DB
+}
+
+type RoomStorage struct {
+	MainStorage *Storage
+	RoomID      string
+}
+
+func NewRoomStorage(storage *Storage, room string) (*RoomStorage, error) {
+
+	formattedRoom := strings.TrimSpace(room)
+	if formattedRoom == "" {
+		return &RoomStorage{}, errors.New("Invalid room")
+	}
+
+	if storage == nil {
+		return &RoomStorage{}, errors.New("Invalid storage")
+	}
+
+	roomStorage := RoomStorage{
+		MainStorage: storage,
+		RoomID:      formattedRoom,
+	}
+
+	return &roomStorage, nil
 }
 
 func (s *Storage) OpenDB(path string) error {
@@ -26,25 +54,10 @@ func (s *Storage) OpenDB(path string) error {
 	s.db = db
 
 	errBuckets := s.db.Update(func(tx *bolt.Tx) error {
-		_, err1 := tx.CreateBucketIfNotExists([]byte("metadata"))
 
-		if err1 != nil {
-			return fmt.Errorf("create bucket: %s", err1)
-		}
-
-		_, err2 := tx.CreateBucketIfNotExists([]byte("elements"))
-		if err2 != nil {
-			return fmt.Errorf("create bucket: %s", err2)
-		}
-
-		_, err3 := tx.CreateBucketIfNotExists([]byte("insert_log"))
-		if err3 != nil {
-			return fmt.Errorf("create bucket: %s", err3)
-		}
-
-		_, err4 := tx.CreateBucketIfNotExists([]byte("delete_log"))
-		if err4 != nil {
-			return fmt.Errorf("create bucket: %s", err4)
+		_, errRoot := tx.CreateBucketIfNotExists([]byte("rooms"))
+		if errRoot != nil {
+			return errRoot
 		}
 
 		return nil
@@ -57,6 +70,44 @@ func (s *Storage) OpenDB(path string) error {
 	return nil
 }
 
+func (s *Storage) createRoom(bucket *bolt.Bucket, room string) (*bolt.Bucket, error) {
+
+	formattedRoom := strings.TrimSpace(room)
+
+	if formattedRoom == "" {
+		return nil, errors.New("empty room")
+	}
+
+	subRoom, errRoom := bucket.CreateBucketIfNotExists([]byte(formattedRoom))
+
+	if errRoom != nil {
+		return nil, errRoom
+	}
+
+	_, err1 := subRoom.CreateBucketIfNotExists([]byte("metadata"))
+
+	if err1 != nil {
+		return nil, fmt.Errorf("create bucket: %s", err1)
+	}
+
+	_, err2 := subRoom.CreateBucketIfNotExists([]byte("elements"))
+	if err2 != nil {
+		return nil, fmt.Errorf("create bucket: %s", err2)
+	}
+
+	_, err3 := subRoom.CreateBucketIfNotExists([]byte("insert_log"))
+	if err3 != nil {
+		return nil, fmt.Errorf("create bucket: %s", err3)
+	}
+
+	_, err4 := subRoom.CreateBucketIfNotExists([]byte("delete_log"))
+	if err4 != nil {
+		return nil, fmt.Errorf("create bucket: %s", err4)
+	}
+
+	return subRoom, nil
+}
+
 func (s *Storage) CloseDB() error {
 	if err := s.db.Close(); err != nil {
 		return err
@@ -65,27 +116,41 @@ func (s *Storage) CloseDB() error {
 	return nil
 }
 
-func (s *Storage) SaveSnapshot(document *document.Document) error {
+func (s *Storage) SaveSnapshot(document *document.Document, room string) error {
+
 	errTransaction := s.db.Update(func(tx *bolt.Tx) error {
-		err1 := s.SaveMetadata(tx, document)
+
+		root := tx.Bucket([]byte("rooms"))
+
+		if root == nil {
+			return errors.New("No bucket found")
+		}
+
+		roomBucket, errRoom := s.createRoom(root, room)
+
+		if errRoom != nil {
+			return errRoom
+		}
+
+		err1 := s.SaveMetadata(roomBucket, document)
 
 		if err1 != nil {
 			return err1
 		}
 
-		err2 := s.SaveElements(tx, *document)
+		err2 := s.SaveElements(roomBucket, *document)
 
 		if err2 != nil {
 			return err2
 		}
 
-		err3 := s.SaveInsertOperations(tx, *document)
+		err3 := s.SaveInsertOperations(roomBucket, *document)
 
 		if err3 != nil {
 			return err3
 		}
 
-		err4 := s.SaveDeleteOperations(tx, *document)
+		err4 := s.SaveDeleteOperations(roomBucket, *document)
 
 		if err4 != nil {
 			return err4
@@ -101,7 +166,11 @@ func (s *Storage) SaveSnapshot(document *document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadSnapshot() (*persistence.PersistedMetadata, map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, map[identifier.ID]*protocol.InsertOperation, map[identifier.ID]*protocol.DeleteOperation, error) {
+func (rs *RoomStorage) LoadSnapshot() (*persistence.PersistedMetadata, map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, map[identifier.ID]*protocol.InsertOperation, map[identifier.ID]*protocol.DeleteOperation, error) {
+	return rs.MainStorage.LoadSnapshot(rs.RoomID)
+}
+
+func (s *Storage) LoadSnapshot(room string) (*persistence.PersistedMetadata, map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, map[identifier.ID]*protocol.InsertOperation, map[identifier.ID]*protocol.DeleteOperation, error) {
 
 	var metadata *persistence.PersistedMetadata
 	var err1 error
@@ -115,27 +184,39 @@ func (s *Storage) LoadSnapshot() (*persistence.PersistedMetadata, map[identifier
 	var deleteLog map[identifier.ID]*protocol.DeleteOperation
 	var err4 error
 
+	formattedRoom := strings.TrimSpace(room)
+
 	errTransaction := s.db.View(func(tx *bolt.Tx) error {
 
-		metadata, err1 = s.LoadMetadata(tx)
+		root := tx.Bucket([]byte("rooms"))
+		if root == nil {
+			return errors.New("No bucket assigned.")
+		}
+
+		roomBucket := root.Bucket([]byte(formattedRoom))
+		if roomBucket == nil {
+			return ErrSnapshotNotFound
+		}
+
+		metadata, err1 = s.LoadMetadata(roomBucket)
 
 		if err1 != nil {
 			return err1
 		}
 
-		elementsPersisted, elementsByID, err2 = s.LoadElements(tx)
+		elementsPersisted, elementsByID, err2 = s.LoadElements(roomBucket)
 
 		if err2 != nil {
 			return err2
 		}
 
-		insertLog, err3 = s.LoadInsertOperations(tx)
+		insertLog, err3 = s.LoadInsertOperations(roomBucket)
 
 		if err3 != nil {
 			return err3
 		}
 
-		deleteLog, err4 = s.LoadDeleteOperations(tx)
+		deleteLog, err4 = s.LoadDeleteOperations(roomBucket)
 
 		if err4 != nil {
 			return err4
@@ -151,7 +232,44 @@ func (s *Storage) LoadSnapshot() (*persistence.PersistedMetadata, map[identifier
 	return metadata, elementsPersisted, elementsByID, insertLog, deleteLog, nil
 }
 
-func (s *Storage) SaveMetadata(tx *bolt.Tx, document *document.Document) error {
+func (s *Storage) LoadInternalSnapshot(room string) (protocol.Delta, error) {
+
+	var delta protocol.Delta
+	var err error
+
+	formattedRoom := strings.TrimSpace(room)
+	if formattedRoom == "" {
+		return protocol.Delta{}, errors.New("No room found")
+	}
+
+	errView := s.db.View(func(tx *bolt.Tx) error {
+
+		root := tx.Bucket([]byte("rooms"))
+		if root == nil {
+			return errors.New("No bucket found")
+		}
+
+		snapshotRoom := root.Bucket([]byte(formattedRoom))
+		if snapshotRoom == nil {
+			return ErrSnapshotNotFound
+		}
+
+		delta, err = s.LoadSnapshotRoom(snapshotRoom)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if errView != nil {
+		return protocol.Delta{}, errView
+	}
+
+	return delta, nil
+}
+
+func (s *Storage) SaveMetadata(bucketRoom *bolt.Bucket, document *document.Document) error {
 
 	persistedMetadata := ToPersistedMetadata(document)
 
@@ -161,13 +279,17 @@ func (s *Storage) SaveMetadata(tx *bolt.Tx, document *document.Document) error {
 		return err
 	}
 
-	bucket := tx.Bucket([]byte("metadata"))
-
-	if bucket == nil {
+	if bucketRoom == nil {
 		return fmt.Errorf("No bucket asigned.")
 	}
 
-	err1 := bucket.Put([]byte("document"), data)
+	metadata := bucketRoom.Bucket([]byte("metadata"))
+
+	if metadata == nil {
+		return fmt.Errorf("No bucket asigned.")
+	}
+
+	err1 := metadata.Put([]byte("document"), data)
 
 	if err1 != nil {
 		return fmt.Errorf("Failed to assign data.")
@@ -176,20 +298,24 @@ func (s *Storage) SaveMetadata(tx *bolt.Tx, document *document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadMetadata(tx *bolt.Tx) (*persistence.PersistedMetadata, error) {
+func (s *Storage) LoadMetadata(roomBucket *bolt.Bucket) (*persistence.PersistedMetadata, error) {
 
 	var persistedMetadata persistence.PersistedMetadata
 
-	bucket := tx.Bucket([]byte("metadata"))
-
-	if bucket == nil {
-		return nil, fmt.Errorf("No bucket found.")
+	if roomBucket == nil {
+		return nil, ErrSnapshotNotFound
 	}
 
-	data := bucket.Get([]byte("document"))
+	metadata := roomBucket.Bucket([]byte("metadata"))
+
+	if metadata == nil {
+		return nil, ErrSnapshotNotFound
+	}
+
+	data := metadata.Get([]byte("document"))
 
 	if data == nil {
-		return nil, fmt.Errorf("No data associated with the key.")
+		return nil, ErrSnapshotNotFound
 	}
 
 	err := json.Unmarshal(data, &persistedMetadata)
@@ -205,11 +331,15 @@ func formatID(clientID identifier.ID) string {
 	return "(" + clientID.ClientID + "," + fmt.Sprint(clientID.Clock) + ")"
 }
 
-func (s *Storage) SaveElements(tx *bolt.Tx, document document.Document) error {
+func (s *Storage) SaveElements(bucketRoom *bolt.Bucket, document document.Document) error {
 
-	bucket := tx.Bucket([]byte("elements"))
+	if bucketRoom == nil {
+		return fmt.Errorf("No bucket assigned.")
+	}
 
-	if bucket == nil {
+	elements := bucketRoom.Bucket([]byte("elements"))
+
+	if elements == nil {
 		return fmt.Errorf("No bucket assigned.")
 	}
 
@@ -228,7 +358,7 @@ func (s *Storage) SaveElements(tx *bolt.Tx, document document.Document) error {
 			return err
 		}
 
-		err1 := bucket.Put(elementID, data)
+		err1 := elements.Put(elementID, data)
 
 		if err1 != nil {
 			return err1
@@ -240,18 +370,22 @@ func (s *Storage) SaveElements(tx *bolt.Tx, document document.Document) error {
 	return nil
 }
 
-func (s *Storage) LoadElements(tx *bolt.Tx) (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, error) {
+func (s *Storage) LoadElements(roomBucket *bolt.Bucket) (map[identifier.ID]*persistence.PersistedElement, map[identifier.ID]*document.Element, error) {
 
 	elementByIDs := make(map[identifier.ID]*document.Element)
 	elementsPersisted := make(map[identifier.ID]*persistence.PersistedElement)
 
-	bucket := tx.Bucket([]byte("elements"))
-
-	if bucket == nil {
+	if roomBucket == nil {
 		return nil, nil, fmt.Errorf("No bucket assigned.")
 	}
 
-	err := bucket.ForEach(func(k, v []byte) error {
+	elements := roomBucket.Bucket([]byte("elements"))
+
+	if elements == nil {
+		return nil, nil, fmt.Errorf("No bucket found.")
+	}
+
+	err := elements.ForEach(func(k, v []byte) error {
 
 		var persistedElement persistence.PersistedElement
 
@@ -277,11 +411,15 @@ func (s *Storage) LoadElements(tx *bolt.Tx) (map[identifier.ID]*persistence.Pers
 	return elementsPersisted, elementByIDs, nil
 }
 
-func (s *Storage) SaveInsertOperations(tx *bolt.Tx, document document.Document) error {
+func (s *Storage) SaveInsertOperations(bucketRoom *bolt.Bucket, document document.Document) error {
 
-	bucket := tx.Bucket([]byte("insert_log"))
+	if bucketRoom == nil {
+		return fmt.Errorf("No bucket assigned.")
+	}
 
-	if bucket == nil {
+	insertLog := bucketRoom.Bucket([]byte("insert_log"))
+
+	if insertLog == nil {
 		return fmt.Errorf("No bucket assigned.")
 	}
 
@@ -300,7 +438,7 @@ func (s *Storage) SaveInsertOperations(tx *bolt.Tx, document document.Document) 
 			return err
 		}
 
-		err1 := bucket.Put(newID, data)
+		err1 := insertLog.Put(newID, data)
 
 		if err1 != nil {
 			return err1
@@ -310,17 +448,21 @@ func (s *Storage) SaveInsertOperations(tx *bolt.Tx, document document.Document) 
 	return nil
 }
 
-func (s *Storage) LoadInsertOperations(tx *bolt.Tx) (map[identifier.ID]*protocol.InsertOperation, error) {
+func (s *Storage) LoadInsertOperations(roomBucket *bolt.Bucket) (map[identifier.ID]*protocol.InsertOperation, error) {
 
 	insertLog := make(map[identifier.ID]*protocol.InsertOperation)
 
-	bucket := tx.Bucket([]byte("insert_log"))
-
-	if bucket == nil {
+	if roomBucket == nil {
 		return nil, fmt.Errorf("No bucket assigned.")
 	}
 
-	err := bucket.ForEach(func(k, v []byte) error {
+	insertBucket := roomBucket.Bucket([]byte("insert_log"))
+
+	if insertBucket == nil {
+		return nil, fmt.Errorf("No bucket found.")
+	}
+
+	err := insertBucket.ForEach(func(k, v []byte) error {
 
 		var persistedInsert persistence.PersistedInsertOperation
 
@@ -345,11 +487,15 @@ func (s *Storage) LoadInsertOperations(tx *bolt.Tx) (map[identifier.ID]*protocol
 	return insertLog, nil
 }
 
-func (s *Storage) SaveDeleteOperations(tx *bolt.Tx, document document.Document) error {
+func (s *Storage) SaveDeleteOperations(bucketRoom *bolt.Bucket, document document.Document) error {
 
-	bucket := tx.Bucket([]byte("delete_log"))
+	if bucketRoom == nil {
+		return fmt.Errorf("No bucket assigned.")
+	}
 
-	if bucket == nil {
+	deleteLog := bucketRoom.Bucket([]byte("delete_log"))
+
+	if deleteLog == nil {
 		return fmt.Errorf("No bucket assigned.")
 	}
 
@@ -368,7 +514,7 @@ func (s *Storage) SaveDeleteOperations(tx *bolt.Tx, document document.Document) 
 			return err
 		}
 
-		err1 := bucket.Put(targetID, data)
+		err1 := deleteLog.Put(targetID, data)
 
 		if err1 != nil {
 			return err1
@@ -378,17 +524,20 @@ func (s *Storage) SaveDeleteOperations(tx *bolt.Tx, document document.Document) 
 	return nil
 }
 
-func (s *Storage) LoadDeleteOperations(tx *bolt.Tx) (map[identifier.ID]*protocol.DeleteOperation, error) {
+func (s *Storage) LoadDeleteOperations(roomBucket *bolt.Bucket) (map[identifier.ID]*protocol.DeleteOperation, error) {
 
 	deleteLog := make(map[identifier.ID]*protocol.DeleteOperation)
 
-	bucket := tx.Bucket([]byte("delete_log"))
-
-	if bucket == nil {
+	if roomBucket == nil {
 		return nil, fmt.Errorf("No bucket assigned.")
 	}
 
-	err := bucket.ForEach(func(k, v []byte) error {
+	deleteBucket := roomBucket.Bucket([]byte("delete_log"))
+	if deleteBucket == nil {
+		return nil, fmt.Errorf("No bucket found.")
+	}
+
+	err := deleteBucket.ForEach(func(k, v []byte) error {
 
 		var persistedDelete persistence.PersistedDeleteOperation
 
@@ -410,4 +559,64 @@ func (s *Storage) LoadDeleteOperations(tx *bolt.Tx) (map[identifier.ID]*protocol
 	}
 
 	return deleteLog, nil
+}
+
+func (s *Storage) SaveSnapshotRoom(room string, delta protocol.Delta) error {
+
+	formattedRoom := strings.TrimSpace(room)
+	if formattedRoom == "" {
+		return errors.New("empty room")
+	}
+
+	data, err := json.Marshal(delta)
+	if err != nil {
+		return err
+	}
+
+	errSaving := s.db.Update(func(tx *bolt.Tx) error {
+
+		root := tx.Bucket([]byte("rooms"))
+		if root == nil {
+			return errors.New("no bucket found")
+		}
+
+		savingRoom, errSavingRoom := s.createRoom(root, formattedRoom)
+		if errSavingRoom != nil {
+			return errSavingRoom
+		}
+
+		errSnapshot := savingRoom.Put([]byte("snapshot"), data)
+		if errSnapshot != nil {
+			return errSnapshot
+		}
+
+		return nil
+	})
+
+	if errSaving != nil {
+		return errSaving
+	}
+
+	return nil
+}
+
+func (s *Storage) LoadSnapshotRoom(roomBucket *bolt.Bucket) (protocol.Delta, error) {
+
+	var delta protocol.Delta
+
+	if roomBucket == nil {
+		return protocol.Delta{}, errors.New("No bucket found")
+	}
+
+	data := roomBucket.Get([]byte("snapshot"))
+	if data == nil {
+		return protocol.Delta{}, ErrSnapshotNotFound
+	}
+
+	err := json.Unmarshal(data, &delta)
+	if err != nil {
+		return protocol.Delta{}, err
+	}
+
+	return delta, nil
 }

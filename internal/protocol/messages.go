@@ -14,11 +14,13 @@ var TypeJoin = "join"
 var TypeJoinAck = "join_ack"
 var TypeError = "error"
 var TypeUpdate = "update"
+var TypeSnapshot = "snapshot"
 
 var OpInsert = "insert"
 var OpDelete = "delete"
 var OpSync1 = "sync_step1"
 var OpSync2 = "sync_step2"
+var OpSnapshot = "snapshot"
 
 var InternalError = "internal_error"
 var InternalErrorMessage = "Server internal error."
@@ -94,6 +96,11 @@ type SyncOp2 struct {
 	Delta *Delta `json:"delta"`
 }
 
+type SnapshotOp struct {
+	Type  string `json:"type"`
+	Delta *Delta `json:"delta"`
+}
+
 func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
 
 	var msg Envelope
@@ -135,28 +142,28 @@ func DecodeUpdate(message []byte) (UpdatePayload, error) {
 		return UpdatePayload{}, errors.New("invalid_payload")
 	}
 
-	if formattedType != OpInsert && formattedType != OpDelete && formattedType != OpSync1 && formattedType != OpSync2 {
+	if formattedType != OpInsert && formattedType != OpDelete && formattedType != OpSync1 && formattedType != OpSync2 && formattedType != OpSnapshot {
 		return UpdatePayload{}, errors.New("invalid_payload")
 	}
 
 	switch formattedType {
 	case OpInsert:
-		errInsert := DecodeInsert(payload)
+		_, errInsert := DecodeInsert(payload)
 		if errInsert != nil {
 			return UpdatePayload{}, errInsert
 		}
 	case OpDelete:
-		errDelete := DecodeDelete(payload)
+		_, errDelete := DecodeDelete(payload)
 		if errDelete != nil {
 			return UpdatePayload{}, errDelete
 		}
 	case OpSync1:
-		errSync1 := DecodeSync1(payload)
+		_, errSync1 := DecodeSync1(payload)
 		if errSync1 != nil {
 			return UpdatePayload{}, errSync1
 		}
 	case OpSync2:
-		errSync2 := DecodeSync2(payload)
+		_, errSync2 := DecodeSync2(payload)
 		if errSync2 != nil {
 			return UpdatePayload{}, errSync2
 		}
@@ -275,92 +282,109 @@ func EncodeErrorPayload(code string, message string) ([]byte, error) {
 	return errPackage, nil
 }
 
-func DecodeInsert(payloadInsert UpdatePayload) error {
+func DecodeInsert(payloadInsert UpdatePayload) (InsertOp, error) {
 
 	var insertBytes InsertOp
 
 	err := json.Unmarshal(payloadInsert.Operation, &insertBytes)
 
 	if err != nil {
-		return err
+		return InsertOp{}, err
 	}
 
 	if insertBytes.NewID.ClientID == "" {
-		return errors.New("missing_field")
+		return InsertOp{}, errors.New("missing_field")
 	}
 
 	if insertBytes.OriginID.ClientID == "" {
-		return errors.New("missing_field")
+		return InsertOp{}, errors.New("missing_field")
 	}
 
 	if insertBytes.RightID.ClientID == "" {
-		return errors.New("missing_field")
+		return InsertOp{}, errors.New("missing_field")
 	}
 
 	characters := []rune(insertBytes.Character)
 
 	if len(characters) == 0 {
-		return errors.New("missing_field")
+		return InsertOp{}, errors.New("missing_field")
 	}
 
 	if len(characters) != 1 {
-		return errors.New("invalid_payload")
+		return InsertOp{}, errors.New("invalid_payload")
 	}
 
-	return nil
+	return insertBytes, nil
 }
 
-func DecodeDelete(payloadDelete UpdatePayload) error {
+func DecodeDelete(payloadDelete UpdatePayload) (DeleteOp, error) {
 
 	var deleteBytes DeleteOp
 
 	err := json.Unmarshal(payloadDelete.Operation, &deleteBytes)
 
 	if err != nil {
-		return err
+		return DeleteOp{}, err
 	}
 
 	if deleteBytes.TargetID.ClientID == "" {
-		return errors.New("missing_field")
+		return DeleteOp{}, errors.New("missing_field")
 	}
 
-	return nil
+	return deleteBytes, nil
 }
 
-func DecodeSync1(payloadSync1 UpdatePayload) error {
+func DecodeSync1(payloadSync1 UpdatePayload) (SyncOp1, error) {
 
 	var sync1Bytes SyncOp1
 
 	err := json.Unmarshal(payloadSync1.Operation, &sync1Bytes)
 
 	if err != nil {
-		return err
+		return SyncOp1{}, err
 	}
 
 	if sync1Bytes.VectorState == nil {
-		return errors.New("missing_field")
+		return SyncOp1{}, errors.New("missing_field")
 	}
 
 	if sync1Bytes.DeleteSet == nil {
-		return errors.New("missing_field")
+		return SyncOp1{}, errors.New("missing_field")
 	}
 
-	return nil
+	return sync1Bytes, nil
 }
 
-func DecodeSync2(payloadSync2 UpdatePayload) error {
+func DecodeSync2(payloadSync2 UpdatePayload) (SyncOp2, error) {
 
 	var sync2Bytes SyncOp2
 
 	err := json.Unmarshal(payloadSync2.Operation, &sync2Bytes)
 
 	if err != nil {
-		return err
+		return SyncOp2{}, err
 	}
 
 	if sync2Bytes.Delta == nil {
-		return errors.New("missing_field")
+		return SyncOp2{}, errors.New("missing_field")
 	}
 
-	return nil
+	return sync2Bytes, nil
+}
+
+func DecodeSnapshot(payloadSnapshot UpdatePayload) (SnapshotOp, error) {
+
+	var snapshotBytes SnapshotOp
+
+	err := json.Unmarshal(payloadSnapshot.Operation, &snapshotBytes)
+
+	if err != nil {
+		return SnapshotOp{}, err
+	}
+
+	if snapshotBytes.Delta == nil {
+		return SnapshotOp{}, errors.New("missing_field")
+	}
+
+	return snapshotBytes, nil
 }

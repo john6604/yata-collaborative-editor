@@ -288,6 +288,44 @@ func EncodeSyncStep2(delta protocol.Delta) ([]byte, error) {
 	return envelopeBytes, nil
 }
 
+func EncodeSnapshot(delta protocol.Delta) ([]byte, error) {
+
+	snapshotOperation := protocol.SnapshotOp{
+		Type:  protocol.OpSnapshot,
+		Delta: &delta,
+	}
+
+	snapshotEnvelope, errSnapshot := json.Marshal(snapshotOperation)
+
+	if errSnapshot != nil {
+		return nil, errSnapshot
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: snapshotEnvelope,
+	}
+
+	updateEnvelope, errUpdate := json.Marshal(updatePayload)
+
+	if errUpdate != nil {
+		return nil, errUpdate
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+
+	envelopeBytes, errEnvelope := json.Marshal(envelope)
+
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	return envelopeBytes, nil
+}
+
 func EncodeUpdateOperation(convertedOperation ConvertedOperation) ([]byte, error) {
 
 	var operation []byte
