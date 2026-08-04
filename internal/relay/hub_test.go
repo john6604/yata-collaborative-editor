@@ -1,6 +1,5 @@
 package relay_test
 
-/*
 import (
 	"fmt"
 	"sync"
@@ -29,7 +28,7 @@ func TestJoinCreatesRoomAndRegistersClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A")
+	session, err := hub.Join("room-1", "client-A", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -88,7 +87,7 @@ func TestJoinRegistersTwoClientsInSameRoom(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err := hub.Join("room-1", "client-A")
+	session1, err := hub.Join("room-1", "client-A", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -98,7 +97,7 @@ func TestJoinRegistersTwoClientsInSameRoom(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err1 := hub.Join("room-1", "client-B")
+	session2, err1 := hub.Join("room-1", "client-B", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -173,7 +172,7 @@ func TestJoinRejectsDuplicateClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A")
+	session1, err1 := hub.Join("room-1", "client-A", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -183,7 +182,7 @@ func TestJoinRejectsDuplicateClient(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err2 := hub.Join("room-1", "client-A")
+	session2, err2 := hub.Join("room-1", "client-A", nil)
 
 	if err2 == nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -243,7 +242,7 @@ func TestSameClientIDCanJoinDifferentRooms(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A")
+	session1, err1 := hub.Join("room-1", "client-A", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -253,7 +252,7 @@ func TestSameClientIDCanJoinDifferentRooms(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err2 := hub.Join("room-2", "client-A")
+	session2, err2 := hub.Join("room-2", "client-A", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -299,13 +298,13 @@ func TestLeaveRemovesOnlySelectedClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A")
+	session1, err1 := hub.Join("room-1", "client-A", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
 	}
 
-	_, err2 := hub.Join("room-1", "client-B")
+	_, err2 := hub.Join("room-1", "client-B", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -365,7 +364,7 @@ func TestLeaveLastClientRemovesRoom(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A")
+	session, err := hub.Join("room-1", "client-A", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -395,7 +394,7 @@ func TestLeaveTwiceDoesNotPanic(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A")
+	session, err := hub.Join("room-1", "client-A", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -438,7 +437,7 @@ func TestOldSessionDoesNotRemoveNewSession(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	oldSession, err1 := hub.Join("room-1", "client-A")
+	oldSession, err1 := hub.Join("room-1", "client-A", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -446,7 +445,7 @@ func TestOldSessionDoesNotRemoveNewSession(t *testing.T) {
 
 	hub.Leave(oldSession)
 
-	newSession, err2 := hub.Join("room-1", "client-A")
+	newSession, err2 := hub.Join("room-1", "client-A", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -514,7 +513,7 @@ func TestJoinRejectsEmptyRoomIDAndClientID(t *testing.T) {
 
 			hub := relay.NewHub()
 
-			session, err := hub.Join(tt.roomID, tt.clientID)
+			session, err := hub.Join(tt.roomID, tt.clientID, nil)
 
 			if err == nil {
 				t.Fatal("An error was expected.")
@@ -557,7 +556,7 @@ func TestHubConcurrentJoinLeaveAndRead(t *testing.T) {
 			roomID := fmt.Sprintf("room-%d", index%5)
 			clientID := fmt.Sprintf("client-%d", index)
 
-			session, err := hub.Join(roomID, clientID)
+			session, err := hub.Join(roomID, clientID, nil)
 
 			if err != nil {
 				errs <- err
@@ -611,4 +610,3 @@ func TestHubConcurrentJoinLeaveAndRead(t *testing.T) {
 		)
 	}
 }
-*/

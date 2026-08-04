@@ -21,7 +21,17 @@ var (
 func startWebSocketTestServer(t *testing.T) string {
 	t.Helper()
 
-	server := httptest.NewServer(http.HandlerFunc(NewRelayServer("").ws))
+	relayServer, err := NewRelayServer(t.TempDir()+"/relay.db", ":0")
+	if err != nil {
+		t.Fatalf("NewRelayServer() returned an unexpected error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := relayServer.storage.CloseDB(); err != nil {
+			t.Errorf("CloseDB() returned an unexpected error: %v", err)
+		}
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(relayServer.ws))
 	t.Cleanup(server.Close)
 
 	return "ws" + strings.TrimPrefix(server.URL, "http")

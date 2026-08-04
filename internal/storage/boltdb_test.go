@@ -15,6 +15,8 @@ var (
 	testEndID   = identifier.ID{ClientID: "END", Clock: -2}
 )
 
+const testRoomID = "room-1"
+
 func openTestStorage(t *testing.T) *Storage {
 	t.Helper()
 
@@ -41,6 +43,22 @@ func insertRune(t *testing.T, doc *document.Document, character rune) identifier
 	}
 
 	return id
+}
+
+func reconstructFromRoom(t *testing.T, storage *Storage, roomID string) *document.Document {
+	t.Helper()
+
+	roomStorage, err := NewRoomStorage(storage, roomID)
+	if err != nil {
+		t.Fatalf("NewRoomStorage() returned an unexpected error: %v", err)
+	}
+
+	reconstructed := document.NewDocument()
+	if err := reconstructed.ReconstructDocument(roomStorage); err != nil {
+		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
+	}
+
+	return reconstructed
 }
 
 func assertInsertLogsEqual(t *testing.T, got, want map[identifier.ID]*protocol.InsertOperation) {
@@ -74,14 +92,11 @@ func TestSnapshotRoundTripBasic(t *testing.T) {
 		t.Fatalf("Delete(1) returned an unexpected error: %v", err)
 	}
 
-	if err := storage.SaveSnapshot(original); err != nil {
+	if err := storage.SaveSnapshot(original, testRoomID); err != nil {
 		t.Fatalf("SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	reconstructed := document.NewDocument()
-	if err := reconstructed.ReconstructDocument(storage); err != nil {
-		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	reconstructed := reconstructFromRoom(t, storage, testRoomID)
 
 	if got, want := reconstructed.VisibleContent(), original.VisibleContent(); got != want {
 		t.Errorf("VisibleContent() = %q; expected %q", got, want)
@@ -137,19 +152,16 @@ func TestSnapshotRoundTripUnicodeContent(t *testing.T) {
 	original.Clock = 0
 
 	insertRune(t, original, 'H')
-	insertRune(t, original, 'ñ')
-	insertRune(t, original, '😀')
+	insertRune(t, original, '\u00f1')
+	insertRune(t, original, '\U0001F600')
 
-	if err := storage.SaveSnapshot(original); err != nil {
+	if err := storage.SaveSnapshot(original, testRoomID); err != nil {
 		t.Fatalf("SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	reconstructed := document.NewDocument()
-	if err := reconstructed.ReconstructDocument(storage); err != nil {
-		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	reconstructed := reconstructFromRoom(t, storage, testRoomID)
 
-	if got, want := reconstructed.VisibleContent(), "Hñ😀"; got != want {
+	if got, want := reconstructed.VisibleContent(), "H\u00f1\U0001F600"; got != want {
 		t.Errorf("VisibleContent() = %q; expected %q", got, want)
 	}
 	if got, want := reconstructed.VisibleLength(), 3; got != want {
@@ -176,14 +188,11 @@ func TestSnapshotRoundTripKeepsUnresolvablePendings(t *testing.T) {
 		t.Fatalf("RemoteDelete() returned an unexpected error: %v", err)
 	}
 
-	if err := storage.SaveSnapshot(original); err != nil {
+	if err := storage.SaveSnapshot(original, testRoomID); err != nil {
 		t.Fatalf("SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	reconstructed := document.NewDocument()
-	if err := reconstructed.ReconstructDocument(storage); err != nil {
-		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	reconstructed := reconstructFromRoom(t, storage, testRoomID)
 
 	if got := reconstructed.VisibleContent(); got != "" {
 		t.Errorf("VisibleContent() = %q; expected an empty document", got)
@@ -232,14 +241,11 @@ func TestSnapshotRoundTripResolvesCausalPendings(t *testing.T) {
 	original.InsertLog[idC] = protocol.NewInsertOperation(idC, idB, testEndID, 'C')
 	original.DeleteLog[idC] = protocol.NewDeleteOperation(idC)
 
-	if err := storage.SaveSnapshot(original); err != nil {
+	if err := storage.SaveSnapshot(original, testRoomID); err != nil {
 		t.Fatalf("SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	reconstructed := document.NewDocument()
-	if err := reconstructed.ReconstructDocument(storage); err != nil {
-		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	reconstructed := reconstructFromRoom(t, storage, testRoomID)
 
 	if got, want := reconstructed.VisibleContent(), "AB"; got != want {
 		t.Errorf("VisibleContent() = %q; expected %q", got, want)

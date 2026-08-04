@@ -34,7 +34,7 @@ func testInsertUpdatePayload(t *testing.T, character any) UpdatePayload {
 func TestDecodeInsertAcceptsSingleRuneCharacterStrings(t *testing.T) {
 	for _, character := range []string{"H", "ñ", "😀"} {
 		t.Run(character, func(t *testing.T) {
-			if err := DecodeInsert(testInsertUpdatePayload(t, character)); err != nil {
+			if _, err := DecodeInsert(testInsertUpdatePayload(t, character)); err != nil {
 				t.Fatalf("DecodeInsert() returned an unexpected error: %v", err)
 			}
 		})
@@ -53,7 +53,7 @@ func TestDecodeInsertRejectsInvalidCharacterPayloads(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := DecodeInsert(testInsertUpdatePayload(t, tt.character)); err == nil {
+			if _, err := DecodeInsert(testInsertUpdatePayload(t, tt.character)); err == nil {
 				t.Fatal("DecodeInsert() returned nil; expected an error")
 			}
 		})

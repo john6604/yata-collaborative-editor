@@ -11,6 +11,8 @@ import (
 
 var integrationEndID = identifier.ID{ClientID: "END", Clock: -2}
 
+const integrationRoomID = "room-1"
+
 func insertIntegrationRune(t *testing.T, doc *document.Document, character rune) identifier.ID {
 	t.Helper()
 
@@ -46,6 +48,22 @@ func syncFromTo(t *testing.T, source, target *document.Document) {
 	if err := target.IntegrateDelta(delta); err != nil {
 		t.Fatalf("IntegrateDelta() returned an unexpected error: %v", err)
 	}
+}
+
+func reconstructDocumentFromRoom(t *testing.T, sourceStorage *storage.Storage, roomID string) *document.Document {
+	t.Helper()
+
+	roomStorage, err := storage.NewRoomStorage(sourceStorage, roomID)
+	if err != nil {
+		t.Fatalf("NewRoomStorage() returned an unexpected error: %v", err)
+	}
+
+	reconstructed := document.NewDocument()
+	if err := reconstructed.ReconstructDocument(roomStorage); err != nil {
+		t.Fatalf("ReconstructDocument() returned an unexpected error: %v", err)
+	}
+
+	return reconstructed
 }
 
 func assertDocumentsConverged(t *testing.T, left, right *document.Document) {
@@ -103,8 +121,8 @@ func TestSyncEndToEndWithUnicodeContent(t *testing.T) {
 	source.Clock = 0
 
 	insertIntegrationRune(t, source, 'H')
-	insertIntegrationRune(t, source, 'ñ')
-	insertIntegrationRune(t, source, '😀')
+	insertIntegrationRune(t, source, '\u00f1')
+	insertIntegrationRune(t, source, '\U0001F600')
 
 	target := document.NewDocument()
 
@@ -136,34 +154,25 @@ func TestSyncEndToEndAfterSnapshotReconstruction(t *testing.T) {
 		}
 	})
 
-	if err := sourceStorage.SaveSnapshot(source); err != nil {
+	if err := sourceStorage.SaveSnapshot(source, integrationRoomID); err != nil {
 		t.Fatalf("source SaveSnapshot() returned an unexpected error: %v", err)
 	}
-	if err := targetStorage.SaveSnapshot(target); err != nil {
+	if err := targetStorage.SaveSnapshot(target, integrationRoomID); err != nil {
 		t.Fatalf("target SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	reconstructedSource := document.NewDocument()
-	if err := reconstructedSource.ReconstructDocument(sourceStorage); err != nil {
-		t.Fatalf("source ReconstructDocument() returned an unexpected error: %v", err)
-	}
-	reconstructedTarget := document.NewDocument()
-	if err := reconstructedTarget.ReconstructDocument(targetStorage); err != nil {
-		t.Fatalf("target ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	reconstructedSource := reconstructDocumentFromRoom(t, sourceStorage, integrationRoomID)
+	reconstructedTarget := reconstructDocumentFromRoom(t, targetStorage, integrationRoomID)
 
 	syncFromTo(t, reconstructedSource, reconstructedTarget)
 	assertDocumentsConverged(t, reconstructedSource, reconstructedTarget)
 
 	// Persist the synchronized target once more and verify convergence survives
 	// another process restart.
-	if err := targetStorage.SaveSnapshot(reconstructedTarget); err != nil {
+	if err := targetStorage.SaveSnapshot(reconstructedTarget, integrationRoomID); err != nil {
 		t.Fatalf("post-sync SaveSnapshot() returned an unexpected error: %v", err)
 	}
 
-	restartedTarget := document.NewDocument()
-	if err := restartedTarget.ReconstructDocument(targetStorage); err != nil {
-		t.Fatalf("post-sync ReconstructDocument() returned an unexpected error: %v", err)
-	}
+	restartedTarget := reconstructDocumentFromRoom(t, targetStorage, integrationRoomID)
 	assertDocumentsConverged(t, reconstructedSource, restartedTarget)
 }
