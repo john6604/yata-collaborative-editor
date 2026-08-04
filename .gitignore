@@ -1,0 +1,7 @@
+# Database
+data/*
+!data/.gitkeep
+
+# Executables
+cmd/editor/*.exe
+cmd/relay/*.exe
