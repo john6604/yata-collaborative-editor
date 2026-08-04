@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/john6604/yata-collaborative-editor/internal/document"
@@ -42,8 +43,31 @@ type CollaborativeClient struct {
 	ReconnectSignal chan struct{}
 	StopSignal      chan struct{}
 	StopOnce        sync.Once
+	StartOnce       sync.Once
 
 	FlushMutex sync.Mutex
+}
+
+func (client *CollaborativeClient) Start() {
+	client.StartOnce.Do(func() {
+		go client.ReconnectLoop()
+
+		client.RequestReconnect()
+	})
+}
+
+func (client *CollaborativeClient) Close() {
+	client.StopOnce.Do(func() {
+		client.ConnMutex.Lock()
+		conn := client.Conn
+		client.State = StateClosing
+		client.Conn = nil
+		client.ConnMutex.Unlock()
+		close(client.StopSignal)
+		if conn != nil {
+			conn.Close()
+		}
+	})
 }
 
 func NewCollaborativeClient(serverURL string, roomID string, clientID string) (*CollaborativeClient, error) {
@@ -262,23 +286,32 @@ func (client *CollaborativeClient) ReconnectLoop() {
 
 		select {
 		case <-client.ReconnectSignal:
-			beginReconnect := client.BeginReconnect()
-			if beginReconnect {
-				conn, err := client.ReconnectOnce()
-				if err != nil {
-					fmt.Println(err)
-				} else {
-					go client.RemoteMessageLoop(conn)
-					fmt.Println("Reconnected and joined...")
+			for {
+				beginReconnect := client.BeginReconnect()
+				if beginReconnect {
+					conn, err := client.ReconnectOnce()
+					if err == nil {
+						go client.RemoteMessageLoop(conn)
+						fmt.Println("Reconnected and joined...")
 
-					errSync := client.SendSync1(conn)
-					if errSync != nil {
-						fmt.Println(errSync)
-						continue
+						errSync := client.SendSync1(conn)
+						if errSync != nil {
+							fmt.Println(errSync)
+							break
+						}
+
+						fmt.Println("Joined and syncing...")
+						break
 					}
-
-					fmt.Println("Joined and syncing...")
+					select {
+					case <-time.After(3 * time.Second):
+						continue
+					case <-client.StopSignal:
+						loop = false
+						return
+					}
 				}
+				break
 			}
 		case <-client.StopSignal:
 			loop = false

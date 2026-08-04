@@ -195,8 +195,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 					}
 					continue
 				}
-				savingRoom := session.roomID
-				errDelta := rs.storage.SaveSnapshotRoom(savingRoom, *snapshot.Delta)
+				errDelta := rs.storage.SaveSnapshotRoom(session.roomID, *snapshot.Delta)
 				if errDelta != nil {
 					errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
 					if errSend != nil {
