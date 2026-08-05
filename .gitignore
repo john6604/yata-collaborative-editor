@@ -5,3 +5,8 @@ data/*
 # Executables
 cmd/editor/*.exe
 cmd/relay/*.exe
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
