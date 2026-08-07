@@ -8,7 +8,7 @@ export  class ID {
     toKey() {
         return `${this.client_id}:${this.clock}`;
     }
-
+    
     compareIDs(id) {
         return(this.client_id === id.client_id && this.clock === id.clock);
     }

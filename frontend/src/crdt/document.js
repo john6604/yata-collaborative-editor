@@ -279,4 +279,23 @@ export class Document {
 
         this.integrateDeletion(elementID);
     }
+
+    integrateDelta(delta) {
+
+        for (const value of delta.inserts) {
+            try {
+                this.remoteInsert(value.new_id, value.origin_id, value.right_id, value.content);
+            } catch (error) {
+                if (error.message === "Pending value." || error.message === "The value was already inserted.") {
+                    continue;
+                }
+
+                throw error;
+            }
+        }
+
+        for (const value of delta.deletes) {
+            this.remoteDelete(value.target_id);
+        }
+    }
 }
