@@ -307,3 +307,29 @@ export function decodeJoinAck(payload) {
 
     return [room, client];
 }
+
+export function decodeError(payload) {
+    if (payload === undefined || payload === null) {
+        throw new Error("invalid payload");
+    }
+
+    if (payload.code === undefined || payload.code === null || payload.message === undefined || payload.message === null) {
+        throw new Error("missing field");
+    }
+
+    if (typeof payload.code !== "string" || typeof payload.message !== "string") {
+        throw new Error("field must be a string");
+    }
+
+    const code = payload.code.trim();
+    const message = payload.message.trim();
+
+    if (code === "" || message === "") {
+        throw new Error("field must not be empty");
+    }
+
+    return {
+        code: code,
+        message: message,
+    };
+}

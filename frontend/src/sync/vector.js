@@ -1,5 +1,5 @@
 import { ID } from "../crdt/identifier";
-import { Sync1Operation, Sync2Operation } from "../crdt/operations";
+import { SnapshotOperation, Sync1Operation, Sync2Operation } from "../crdt/operations";
 
 export class Vector {
     constructor(stateVector, deleteSet) {
@@ -184,4 +184,14 @@ export function generateSync2(document, sync1Operation) {
     const delta = computeSerializedDelta(document, missingInserts, missingDeletes);
 
     return new Sync2Operation(delta);
+}
+
+export function generateSnapshot(document) {
+
+    const vector = new Vector(new Map(), new Map());
+
+    const [missingInserts, missingDeletes] = computeDelta(document, vector);
+    const delta = computeSerializedDelta(document, missingInserts, missingDeletes);
+
+    return new SnapshotOperation(delta);
 }
