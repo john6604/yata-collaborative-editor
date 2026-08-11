@@ -235,15 +235,23 @@ export class Document {
     }
 
     remoteInsert(newID, originID, rightID, content) {
-        if (this.elementsByID.has(newID.toKey())) {
-            throw new Error("The value was already inserted.");
-        }
+        try {
+            if (this.elementsByID.has(newID.toKey())) {
+                throw new Error("The value was already inserted.");
+            }
 
-        if (!this.elementsByID.has(originID.toKey()) || !this.elementsByID.has(rightID.toKey())) {
-            this.pendingInserts.set(newID.toKey(), new PendingElement(newID, originID, rightID, content));
-            const insertOperation = new InsertOperation(newID, originID, rightID, content);
-            this.insertLog.set(newID.toKey(), insertOperation);
-            throw new Error("Pending value.");
+            if (!this.elementsByID.has(originID.toKey()) || !this.elementsByID.has(rightID.toKey())) {
+                this.pendingInserts.set(newID.toKey(), new PendingElement(newID, originID, rightID, content));
+                const insertOperation = new InsertOperation(newID, originID, rightID, content);
+                this.insertLog.set(newID.toKey(), insertOperation);
+                throw new Error("Pending value.");
+            }
+        } catch (err) {
+            if (err.message === "Pending value." || err.message === "The value was already inserted.") {
+                return;
+            }
+
+            throw err;
         }
 
         this.integrateInsert(newID, originID, rightID, content);

@@ -2,7 +2,7 @@ import { encodeUpdate } from "./operationsEncoder"
 
 export function encodeEnvelope(message) {
 
-    const operation =  encodeUpdate(message);
+    const operation = encodeUpdate(message);
     const op = {
         op: operation,
     }
