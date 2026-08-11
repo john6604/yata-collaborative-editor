@@ -1,4 +1,4 @@
-import { decodeUpdate } from "./operationsDecoder";
+import { decodeError, decodeJoinAck, decodeUpdate } from "./operationsDecoder";
 
 export function decodeEnvelope(message) {
 
@@ -45,4 +45,25 @@ export function decodeUpdateOperation(payload) {
     const operation = decodeUpdate(payload.op);
 
     return operation;
+}
+
+export function decodeIncomingMessage(message) {
+    const msg = decodeEnvelope(message);
+    let operation
+
+    switch (msg.type) {
+        case "join_ack":
+            operation = decodeJoinAck(msg.payload);
+            break;
+        case "update":
+            operation = decodeUpdateOperation(msg.payload);
+            break;
+        case "error":
+            operation = decodeError(msg.payload);
+            break;
+        default:
+            throw new Error("unsupported operation");
+    }
+
+    return [msg.type, operation];
 }
