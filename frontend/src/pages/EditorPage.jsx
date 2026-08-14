@@ -20,7 +20,7 @@ function EditorPage({
   users,
 }) {
   const { documentId } = useParams();
-  const { connectionStatus: connectionStatusReal, content, handleInput, handleCompositionEnd } = useCollaborativeDocument(documentId, displayName, editorRef);
+  const { connectionStatus: connectionStatusReal, content, handleInput, handleCompositionEnd, handleBeforeInput } = useCollaborativeDocument(documentId, displayName, editorRef);
   const document = useMemo(() => {
     return documents.find((currentDocument) => currentDocument.id === documentId);
   }, [documentId, documents]);
