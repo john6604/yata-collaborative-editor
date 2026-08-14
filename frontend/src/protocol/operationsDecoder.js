@@ -228,19 +228,30 @@ export function decodeDelta(delta) {
         throw new Error("delta must contain arrays");
     }
 
-    for (const value of delta.inserts) {
-        const newID = validateID(value.NewID);
-        const originID = validateID(value.OriginID);
-        const rightID = validateID(value.RightID);
-        const content = String.fromCodePoint(value.Content);
-
-        inserts.push(new InsertOperation(newID, originID, rightID, content));
+    if (delta.inserts === null && delta.deletes === null) {
+        return {
+            inserts: inserts,
+            deletes: deletes,
+        };
     }
 
-    for (const value of delta.deletes) {
-        const targetID = validateID(value.TargetID);
+    if (delta.inserts !== null) {
+        for (const value of delta.inserts) {
+            const newID = validateID(value.NewID);
+            const originID = validateID(value.OriginID);
+            const rightID = validateID(value.RightID);
+            const content = String.fromCodePoint(value.Content);
 
-        deletes.push(new DeleteOperation(targetID));
+            inserts.push(new InsertOperation(newID, originID, rightID, content));
+        }
+    } 
+    
+    if (delta.deletes !== null) {
+        for (const value of delta.deletes) {
+            const targetID = validateID(value.TargetID);
+
+            deletes.push(new DeleteOperation(targetID));
+        }
     }
 
     return {

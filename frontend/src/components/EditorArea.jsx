@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 
-const EditorArea = forwardRef(function EditorArea({ displayName, documentId }, ref) {
+const EditorArea = forwardRef(function EditorArea({ displayName, documentId, onInput, onCompositionEnd, content }, ref) {
   return (
     <section className="min-w-0 flex-1 p-5" aria-label="Document editor">
       <textarea
@@ -9,6 +9,9 @@ const EditorArea = forwardRef(function EditorArea({ displayName, documentId }, r
         data-document-id={documentId}
         placeholder="Start writing..."
         ref={ref}
+        onChange={onInput}
+        onCompositionEnd={onCompositionEnd}
+        value={content}
         spellCheck="false"
       />
     </section>

@@ -306,4 +306,23 @@ export class Document {
             this.remoteDelete(value.target_id);
         }
     }
+
+    visibleElementIndex(elementID) {
+        let index = 0;
+
+        let current = this.start.right;
+
+        while (current !== this.end) {
+            if (current.isDeleted) {
+                current = current.right;
+                continue;
+            }
+
+            if (current.elementID.client_id === elementID.client_id && current.elementID.clock === elementID.clock) {
+                return index;
+            }
+            current = current.right;
+            index++;
+        }
+    }
 }
