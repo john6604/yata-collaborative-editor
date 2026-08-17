@@ -174,8 +174,8 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
 
         switch (eventType) {
             case "insertText":
-                const insertIndex = selectionToCRDTIndex(text, selectionStart);
                 if (beforeInputState.current.start === beforeInputState.current.end) {
+                    const insertIndex = selectionToCRDTIndex(text, selectionStart);
                     operationID = document.current.insertElement(insertIndex - 1, data);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
@@ -189,13 +189,13 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     const count = beforeEndCrdt - beforeStartCrdt;
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
-                        setContent(document.current.visibleContent());
                         console.log("CRDT:", document.current.visibleContent());
                         const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
                         const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
                         const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
                         websocket.current.send(jsonDeleteBackward);
                     }
+                    setContent(document.current.visibleContent());
                     operationID = document.current.insertElement(beforeStartCrdt, data);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
@@ -204,7 +204,6 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     const jsonInsert = JSON.stringify(insertOperationEnvelope);
                     websocket.current.send(jsonInsert);
                 }
-                
             break;
             case "deleteContentBackward":
                 const deleteBackwardIndex = selectionToCRDTIndex(text, selectionStart);
@@ -222,13 +221,13 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     const count = beforeEndCrdt - beforeStartCrdt;
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
-                        setContent(document.current.visibleContent());
                         console.log("CRDT:", document.current.visibleContent());
                         const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
                         const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
                         const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
                         websocket.current.send(jsonDeleteBackward);
                     }
+                    setContent(document.current.visibleContent());
                 }
             break;
             case "deleteContentForward":
@@ -247,6 +246,69 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     const count = beforeEndCrdt - beforeStartCrdt;
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
+                        console.log("CRDT:", document.current.visibleContent());
+                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
+                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
+                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
+                        websocket.current.send(jsonDeleteBackward);
+                    }
+                    setContent(document.current.visibleContent());
+                }
+            break;
+            case "insertLineBreak":
+                if (beforeInputState.current.start === beforeInputState.current.end) {
+                    const insertIndex = selectionToCRDTIndex(text, selectionStart);
+                    operationID = document.current.insertElement(insertIndex - 1, '\n');
+                    setContent(document.current.visibleContent());
+                    console.log("CRDT:", document.current.visibleContent());
+                    const insertOperation = document.current.insertLog.get(operationID.toKey());
+                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
+                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
+                    websocket.current.send(jsonInsert);
+                } else {
+                    const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
+                    const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
+                    const count = beforeEndCrdt - beforeStartCrdt;
+                    for (let i = 0; i < count; i++) {
+                        operationID = document.current.deleteElement(beforeStartCrdt);
+                        console.log("CRDT:", document.current.visibleContent());
+                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
+                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
+                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
+                        websocket.current.send(jsonDeleteBackward);
+                    }
+                    setContent(document.current.visibleContent());
+                    operationID = document.current.insertElement(beforeStartCrdt, '\n');
+                    setContent(document.current.visibleContent());
+                    console.log("CRDT:", document.current.visibleContent());
+                    const insertOperation = document.current.insertLog.get(operationID.toKey());
+                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
+                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
+                    websocket.current.send(jsonInsert);
+                }
+            break;
+            case "insertFromPaste":
+                if (beforeInputState.current.start === beforeInputState.current.end) {
+                    const count = Array.from(data).length;
+                    const endIndex = selectionToCRDTIndex(text, selectionStart);
+                    let startIndex = endIndex - count;
+                    const characters = Array.from(data);
+                    for (let i = 0; i < count; i++) {
+                        operationID = document.current.insertElement(startIndex, characters[i]);
+                        console.log("CRDT:", document.current.visibleContent());
+                        const insertOperation = document.current.insertLog.get(operationID.toKey());
+                        const insertOperationEnvelope = encodeEnvelope(insertOperation);
+                        const jsonInsert = JSON.stringify(insertOperationEnvelope);
+                        websocket.current.send(jsonInsert);
+                        startIndex++;
+                    }
+                    setContent(document.current.visibleContent());
+                } else {
+                    const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
+                    const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
+                    const n = beforeEndCrdt - beforeStartCrdt;
+                    for (let i = 0; i < n; i++) {
+                        operationID = document.current.deleteElement(beforeStartCrdt);
                         setContent(document.current.visibleContent());
                         console.log("CRDT:", document.current.visibleContent());
                         const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
@@ -254,7 +316,35 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
                         websocket.current.send(jsonDeleteBackward);
                     }
+                    const count = Array.from(data).length;
+                    const endIndex = selectionToCRDTIndex(text, selectionStart);
+                    let startIndex = endIndex - count;
+                    const characters = Array.from(data);
+                    for (let i = 0; i < count; i++) {
+                        operationID = document.current.insertElement(startIndex, characters[i]);
+                        console.log("CRDT:", document.current.visibleContent());
+                        const insertOperation = document.current.insertLog.get(operationID.toKey());
+                        const insertOperationEnvelope = encodeEnvelope(insertOperation);
+                        const jsonInsert = JSON.stringify(insertOperationEnvelope);
+                        websocket.current.send(jsonInsert);
+                        startIndex++;
+                    }
+                    setContent(document.current.visibleContent());
                 }
+            break;
+            case "deleteByCut":
+                const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
+                const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
+                const n = beforeEndCrdt - beforeStartCrdt;
+                for (let i = 0; i < n; i++) {
+                    operationID = document.current.deleteElement(beforeStartCrdt);
+                    console.log("CRDT:", document.current.visibleContent());
+                    const deleteOperation = document.current.deleteLog.get(operationID.toKey());
+                    const deleteOperationEnvelope = encodeEnvelope(deleteOperation);
+                    const jsonDelete = JSON.stringify(deleteOperationEnvelope);
+                    websocket.current.send(jsonDelete);
+                }
+                setContent(document.current.visibleContent());
             break;
         }
         console.log("inputType: ", event.nativeEvent.inputType);
