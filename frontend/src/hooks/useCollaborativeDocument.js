@@ -57,6 +57,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 } else if (messageType === "update" && operation instanceof Sync2Operation) {
                     document.current.integrateDelta(operation.delta);
                     setConnectionStatus("online");
+                    flushPendingOperations();
                     const value = document.current.visibleContent();
                     if (value !== editorRef.current.value) {
                         pendingSelection.current = {
@@ -68,6 +69,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 } else if (messageType === "update" && operation instanceof SnapshotOperation) {
                     document.current.integrateDelta(operation.delta);
                     setConnectionStatus("online");  
+                    flushPendingOperations();
                     const value = document.current.visibleContent();
                     if (value !== editorRef.current.value) {
                         pendingSelection.current = {
@@ -134,6 +136,16 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                 }
             }
+        } 
+
+        if (websocket.current.readyState === WebSocket.CONNECTING || websocket.current.readyState === WebSocket.OPEN) {
+            websocket.current.onclose = () => {
+                setConnectionStatus("disconnected");
+                console.log("client has been disconnected...");
+                setTimeout(() => {
+                    connect(documentID, displayName);
+                }, 2000);
+            }
         }
     }
 
@@ -179,10 +191,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     operationID = document.current.insertElement(insertIndex - 1, data);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const insertOperation = document.current.insertLog.get(operationID.toKey());
-                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                    websocket.current.send(jsonInsert);
+                    sendOrQueue(operationID, true);
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -190,19 +199,13 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
                         console.log("CRDT:", document.current.visibleContent());
-                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                        websocket.current.send(jsonDeleteBackward);
+                        sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
                     operationID = document.current.insertElement(beforeStartCrdt, data);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const insertOperation = document.current.insertLog.get(operationID.toKey());
-                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                    websocket.current.send(jsonInsert);
+                    sendOrQueue(operationID, true);
                 }
             break;
             case "deleteContentBackward":
@@ -211,10 +214,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     operationID = document.current.deleteElement(deleteBackwardIndex);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                    const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                    const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                    websocket.current.send(jsonDeleteBackward);
+                    sendOrQueue(operationID, false);
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -222,10 +222,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
                         console.log("CRDT:", document.current.visibleContent());
-                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                        websocket.current.send(jsonDeleteBackward);
+                        sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
                 }
@@ -236,10 +233,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     operationID = document.current.deleteElement(deleteForwardIndex);
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const deleteForwardOperation = document.current.deleteLog.get(operationID.toKey());
-                    const deleteForwardOperationEnvelope = encodeEnvelope(deleteForwardOperation);
-                    const jsonDeleteForward = JSON.stringify(deleteForwardOperationEnvelope);
-                    websocket.current.send(jsonDeleteForward);
+                    sendOrQueue(operationID, false);
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -247,10 +241,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
                         console.log("CRDT:", document.current.visibleContent());
-                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                        websocket.current.send(jsonDeleteBackward);
+                        sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
                 }
@@ -261,10 +252,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     operationID = document.current.insertElement(insertIndex - 1, '\n');
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const insertOperation = document.current.insertLog.get(operationID.toKey());
-                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                    websocket.current.send(jsonInsert);
+                    sendOrQueue(operationID, true);
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -272,19 +260,13 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
                         console.log("CRDT:", document.current.visibleContent());
-                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                        websocket.current.send(jsonDeleteBackward);
+                        sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
                     operationID = document.current.insertElement(beforeStartCrdt, '\n');
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
-                    const insertOperation = document.current.insertLog.get(operationID.toKey());
-                    const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                    const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                    websocket.current.send(jsonInsert);
+                    sendOrQueue(operationID, true);
                 }
             break;
             case "insertFromPaste":
@@ -296,10 +278,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.insertElement(startIndex, characters[i]);
                         console.log("CRDT:", document.current.visibleContent());
-                        const insertOperation = document.current.insertLog.get(operationID.toKey());
-                        const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                        const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                        websocket.current.send(jsonInsert);
+                        sendOrQueue(operationID, true);
                         startIndex++;
                     }
                     setContent(document.current.visibleContent());
@@ -311,10 +290,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         operationID = document.current.deleteElement(beforeStartCrdt);
                         setContent(document.current.visibleContent());
                         console.log("CRDT:", document.current.visibleContent());
-                        const deleteBackwardOperation = document.current.deleteLog.get(operationID.toKey());
-                        const deleteBackwardOperationEnvelope = encodeEnvelope(deleteBackwardOperation);
-                        const jsonDeleteBackward = JSON.stringify(deleteBackwardOperationEnvelope);
-                        websocket.current.send(jsonDeleteBackward);
+                        sendOrQueue(operationID, false);
                     }
                     const count = Array.from(data).length;
                     const endIndex = selectionToCRDTIndex(text, selectionStart);
@@ -323,10 +299,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     for (let i = 0; i < count; i++) {
                         operationID = document.current.insertElement(startIndex, characters[i]);
                         console.log("CRDT:", document.current.visibleContent());
-                        const insertOperation = document.current.insertLog.get(operationID.toKey());
-                        const insertOperationEnvelope = encodeEnvelope(insertOperation);
-                        const jsonInsert = JSON.stringify(insertOperationEnvelope);
-                        websocket.current.send(jsonInsert);
+                        sendOrQueue(operationID, true);
                         startIndex++;
                     }
                     setContent(document.current.visibleContent());
@@ -339,10 +312,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 for (let i = 0; i < n; i++) {
                     operationID = document.current.deleteElement(beforeStartCrdt);
                     console.log("CRDT:", document.current.visibleContent());
-                    const deleteOperation = document.current.deleteLog.get(operationID.toKey());
-                    const deleteOperationEnvelope = encodeEnvelope(deleteOperation);
-                    const jsonDelete = JSON.stringify(deleteOperationEnvelope);
-                    websocket.current.send(jsonDelete);
+                    sendOrQueue(operationID, false);
                 }
                 setContent(document.current.visibleContent());
             break;
@@ -367,10 +337,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         const operationID = document.current.insertElement(index - 1, data);
         setContent(document.current.visibleContent());
 
-        const insertOperation = document.current.insertLog.get(operationID.toKey());
-        const insertOperationEnvelope = encodeEnvelope(insertOperation);
-        const jsonInsert = JSON.stringify(insertOperationEnvelope);
-        websocket.current.send(jsonInsert);
+        sendOrQueue(operationID, true);
 
         return operationID;
     }
@@ -408,6 +375,51 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         }
 
         return index;
+    }
+
+    function sendOrQueue(operationID, insert) {
+        if (websocket.current.readyState === WebSocket.OPEN && connectionStatus === "online") {
+            let operation;
+            if (insert) {
+                operation = document.current.insertLog.get(operationID.toKey());
+            } else {
+                operation = document.current.deleteLog.get(operationID.toKey());
+            }
+            const operationEnvelope = encodeEnvelope(operation);
+            const jsonOperation = JSON.stringify(operationEnvelope);
+            websocket.current.send(jsonOperation);
+            return
+        }
+
+        if (insert) {
+            pendingOperations.current.push({
+                operation: operationID,
+                type: "insert"
+            });
+        } else {
+            pendingOperations.current.push({
+                operation: operationID,
+                type: "delete"
+            });
+        }
+    }
+
+    function flushPendingOperations() {
+        while (pendingOperations.current.length > 0 && websocket.current.readyState === WebSocket.OPEN) {
+            const operation = pendingOperations.current.shift();
+
+            if (operation.type === "insert") {
+                const insertOperation = document.current.insertLog.get(operation.operation.toKey());
+                const insertOperationEnvelope = encodeEnvelope(insertOperation);
+                const jsonInsert = JSON.stringify(insertOperationEnvelope);
+                websocket.current.send(jsonInsert);
+            } else if (operation.type === "delete") {
+                const deleteOperation = document.current.deleteLog.get(operation.operation.toKey());
+                const deleteOperationEnvelope = encodeEnvelope(deleteOperation);
+                const jsonDelete = JSON.stringify(deleteOperationEnvelope);
+                websocket.current.send(jsonDelete);
+            }
+        }
     }
 
     return {
