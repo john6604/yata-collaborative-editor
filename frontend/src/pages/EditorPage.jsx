@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import EditorArea from '../components/EditorArea.jsx';
 import Sidebar from '../components/Sidebar.jsx';
@@ -8,7 +8,6 @@ import { useCollaborativeDocument } from '../hooks/useCollaborativeDocument.js';
 
 function EditorPage({
   characterCount,
-  connectionStatus,
   cursorCol,
   cursorLine,
   displayName,
@@ -20,12 +19,10 @@ function EditorPage({
   users,
 }) {
   const { documentId } = useParams();
-  const { connectionStatus: connectionStatusReal, content, handleInput, handleCompositionEnd, handleBeforeInput } = useCollaborativeDocument(documentId, displayName, editorRef);
+  const { connectionStatus, content, handleInput, handleCompositionEnd } = useCollaborativeDocument(documentId, displayName, editorRef);
   const document = useMemo(() => {
     return documents.find((currentDocument) => currentDocument.id === documentId);
   }, [documentId, documents]);
-
-  console.log("connectionStatus:", connectionStatusReal);
 
   return (
     <main className="flex min-h-screen flex-col bg-slate-100">

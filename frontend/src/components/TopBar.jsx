@@ -5,9 +5,17 @@ const STATUS_STYLES = {
     dot: 'bg-emerald-500',
     label: 'Connected',
   },
+  connecting: {
+    dot: 'bg-amber-400',
+    label: 'Connecting...',
+  },
   syncing: {
     dot: 'bg-amber-400',
     label: 'Syncing...',
+  },
+  disconnected: {
+    dot: 'bg-red-500',
+    label: 'Disconnected',
   },
   offline: {
     dot: 'bg-red-500',

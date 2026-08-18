@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Document } from "../crdt/document";
 import { encodeJoin } from "../protocol/operationsEncoder";
 import { decodeIncomingMessage } from "../protocol/envelopeDecoder";
-import { generateSync1, generateSync2 } from "../sync/vector";
+import { generateSnapshot, generateSync1, generateSync2 } from "../sync/vector";
 import { encodeEnvelope } from "../protocol/envelopeEncoder";
 import { DeleteOperation, InsertOperation, SnapshotOperation, Sync1Operation, Sync2Operation } from "../crdt/operations";
 
@@ -15,9 +15,15 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     const pendingOperations = useRef([]);
     const pendingSelection = useRef(null);
     const beforeInputState = useRef(null);
+    const connectionStatusRef = useRef("disconnected");
 
     if (document.current === null) {
         document.current = new Document();
+    }
+
+    function updateConnectionStatus(status) {
+        connectionStatusRef.current = status;
+        setConnectionStatus(status);
     }
 
     function connect(documentID, displayName) {
@@ -25,7 +31,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         if (websocket.current === null || websocket.current.readyState === WebSocket.CLOSED) {
             const ws = new WebSocket("ws://localhost:8181/ws");
             websocket.current = ws;
-            setConnectionStatus("connecting");
+            updateConnectionStatus("connecting");
             ws.onopen = () => {
                 const joinMessage = encodeJoin(documentID, displayName);
                 const json = JSON.stringify(joinMessage);
@@ -40,7 +46,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 let end;
 
                 if (messageType === "join_ack") {
-                    setConnectionStatus("syncing");
+                    updateConnectionStatus("syncing");
                     const sync1Operation = generateSync1(document.current);
                     const sync1Message = encodeEnvelope(sync1Operation);
                     const jsonSync1 = JSON.stringify(sync1Message);
@@ -56,7 +62,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     ws.send(jsonSync2);
                 } else if (messageType === "update" && operation instanceof Sync2Operation) {
                     document.current.integrateDelta(operation.delta);
-                    setConnectionStatus("online");
+                    updateConnectionStatus("online");
                     flushPendingOperations();
                     const value = document.current.visibleContent();
                     if (value !== editorRef.current.value) {
@@ -68,7 +74,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     }
                 } else if (messageType === "update" && operation instanceof SnapshotOperation) {
                     document.current.integrateDelta(operation.delta);
-                    setConnectionStatus("online");  
+                    updateConnectionStatus("online");  
                     flushPendingOperations();
                     const value = document.current.visibleContent();
                     if (value !== editorRef.current.value) {
@@ -140,7 +146,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
 
         if (websocket.current.readyState === WebSocket.CONNECTING || websocket.current.readyState === WebSocket.OPEN) {
             websocket.current.onclose = () => {
-                setConnectionStatus("disconnected");
+                updateConnectionStatus("disconnected");
                 console.log("client has been disconnected...");
                 setTimeout(() => {
                     connect(documentID, displayName);
@@ -192,6 +198,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, true);
+                    sendSnapshot();
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -206,6 +213,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, true);
+                    sendSnapshot();
                 }
             break;
             case "deleteContentBackward":
@@ -215,6 +223,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, false);
+                    sendSnapshot();
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -225,6 +234,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
+                    sendSnapshot();
                 }
             break;
             case "deleteContentForward":
@@ -234,6 +244,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, false);
+                    sendSnapshot();
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -244,6 +255,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         sendOrQueue(operationID, false);
                     }
                     setContent(document.current.visibleContent());
+                    sendSnapshot();
                 }
             break;
             case "insertLineBreak":
@@ -253,6 +265,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, true);
+                    sendSnapshot();
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -267,6 +280,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     setContent(document.current.visibleContent());
                     console.log("CRDT:", document.current.visibleContent());
                     sendOrQueue(operationID, true);
+                    sendSnapshot();
                 }
             break;
             case "insertFromPaste":
@@ -282,6 +296,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         startIndex++;
                     }
                     setContent(document.current.visibleContent());
+                    sendSnapshot();
                 } else {
                     const beforeStartCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.start);
                     const beforeEndCrdt = selectionToCRDTIndex(beforeInputState.current.value, beforeInputState.current.end);
@@ -303,6 +318,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         startIndex++;
                     }
                     setContent(document.current.visibleContent());
+                    sendSnapshot();
                 }
             break;
             case "deleteByCut":
@@ -315,6 +331,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                     sendOrQueue(operationID, false);
                 }
                 setContent(document.current.visibleContent());
+                sendSnapshot();
             break;
         }
         console.log("inputType: ", event.nativeEvent.inputType);
@@ -338,6 +355,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         setContent(document.current.visibleContent());
 
         sendOrQueue(operationID, true);
+        sendSnapshot();
 
         return operationID;
     }
@@ -378,7 +396,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     }
 
     function sendOrQueue(operationID, insert) {
-        if (websocket.current.readyState === WebSocket.OPEN && connectionStatus === "online") {
+        if (websocket.current.readyState === WebSocket.OPEN && connectionStatusRef.current === "online") {
             let operation;
             if (insert) {
                 operation = document.current.insertLog.get(operationID.toKey());
@@ -405,7 +423,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     }
 
     function flushPendingOperations() {
-        while (pendingOperations.current.length > 0 && websocket.current.readyState === WebSocket.OPEN) {
+        while (pendingOperations.current.length > 0 && websocket.current.readyState === WebSocket.OPEN && connectionStatusRef.current === "online") {
             const operation = pendingOperations.current.shift();
 
             if (operation.type === "insert") {
@@ -419,6 +437,16 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 const jsonDelete = JSON.stringify(deleteOperationEnvelope);
                 websocket.current.send(jsonDelete);
             }
+        }
+        sendSnapshot();
+    }
+
+    function sendSnapshot() {
+        if (websocket.current.readyState === WebSocket.OPEN && connectionStatusRef.current === "online") {
+            const snapshot = generateSnapshot(document.current);
+            const snapshotEnvelope = encodeEnvelope(snapshot);
+            const jsonSnapshot = JSON.stringify(snapshotEnvelope);
+            websocket.current.send(jsonSnapshot);
         }
     }
 

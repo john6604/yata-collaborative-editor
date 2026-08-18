@@ -8,7 +8,6 @@ import EntryPage from './pages/EntryPage.jsx';
 // === AVAILABLE STATE FOR INTEGRATION ===
 // displayName / setDisplayName - string used later as client ID
 // documents / setDocuments - [{id, name, createdAt}]
-// connectionStatus / setConnectionStatus - "online" | "syncing" | "offline"
 // users / setUsers - [{id, name, color}]
 // characterCount / setCharacterCount - number
 // cursorLine / setCursorLine - number
@@ -37,7 +36,6 @@ const createDocumentId = () => {
 function App() {
   const [displayName, setDisplayName] = useState('');
   const [documents, setDocuments] = useState(INITIAL_DOCUMENTS);
-  const [connectionStatus, setConnectionStatus] = useState('offline');
   const [users, setUsers] = useState([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cursorLine, setCursorLine] = useState(1);
@@ -202,7 +200,6 @@ function App() {
           render={() => (
             <EditorPage
               characterCount={characterCount}
-              connectionStatus={connectionStatus}
               cursorCol={cursorCol}
               cursorLine={cursorLine}
               displayName={effectiveDisplayName}
