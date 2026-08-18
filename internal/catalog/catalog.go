@@ -3,6 +3,9 @@ package catalog
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -19,6 +22,14 @@ type Store struct {
 	db *sql.DB
 }
 
+func (store *Store) Close() error {
+	if store == nil || store.db == nil {
+		return nil
+	}
+
+	return store.db.Close()
+}
+
 func (store *Store) CreateDocument(id string, name string) (*DocumentMetadata, error) {
 	document := DocumentMetadata{
 		DocumentID: id,
@@ -32,7 +43,7 @@ func (store *Store) CreateDocument(id string, name string) (*DocumentMetadata, e
 			document_id,
 			name,
 			created_at,
-			updated_at,
+			updated_at
 		)
 		VALUES(?, ?, ?, ?)`,
 		document.DocumentID, document.Name, document.CreatedAt, document.UpdatedAt)
@@ -110,7 +121,28 @@ func (store *Store) ListDocuments() ([]*DocumentMetadata, error) {
 }
 
 func NewStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	cleanPath := filepath.Clean(path)
+	if cleanPath == "." {
+		return nil, errors.New("database path is empty")
+	}
+
+	info, errStat := os.Stat(cleanPath)
+	if errStat == nil && info.IsDir() {
+		return nil, fmt.Errorf("database path points to a directory: %s", cleanPath)
+	}
+
+	if errStat != nil && !errors.Is(errStat, os.ErrNotExist) {
+		return nil, errStat
+	}
+
+	parent := filepath.Dir(cleanPath)
+	if parent != "." {
+		if errMkdir := os.MkdirAll(parent, 0o755); errMkdir != nil {
+			return nil, errMkdir
+		}
+	}
+
+	db, err := sql.Open("sqlite", cleanPath)
 	if err != nil {
 		return nil, err
 	}
