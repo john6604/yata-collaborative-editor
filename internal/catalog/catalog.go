@@ -12,10 +12,10 @@ import (
 )
 
 type DocumentMetadata struct {
-	DocumentID string
-	Name       string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	DocumentID string    `json:"document_id"`
+	Name       string    `json:"document_name"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type Store struct {
@@ -117,7 +117,38 @@ func (store *Store) ListDocuments() ([]*DocumentMetadata, error) {
 		return []*DocumentMetadata{}, errRows
 	}
 
+	if len(documents) == 0 {
+		return []*DocumentMetadata{}, nil
+	}
+
 	return documents, nil
+}
+
+func (store *Store) GetDocumentByID(id string) (*DocumentMetadata, error) {
+
+	row := store.db.QueryRow(
+		`SELECT document_id, name, created_at, updated_at
+		FROM documents
+		WHERE document_id = ?`, id)
+
+	var ID string
+	var name string
+	var createdAt time.Time
+	var updatedAt time.Time
+
+	errScan := row.Scan(&ID, &name, &createdAt, &updatedAt)
+	if errScan != nil {
+		return nil, errScan
+	}
+
+	document := DocumentMetadata{
+		DocumentID: ID,
+		Name:       name,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
+	}
+
+	return &document, nil
 }
 
 func NewStore(path string) (*Store, error) {

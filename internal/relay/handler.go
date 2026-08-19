@@ -77,7 +77,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	session, errJoinHub := rs.hub.Join(room, client, conn)
+	session, errJoinHub := rs.Hub.Join(room, client, conn)
 	if errJoinHub != nil {
 		SendErrorMessage(
 			protocol.InternalError,
@@ -87,7 +87,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	defer rs.hub.Leave(session)
+	defer rs.Hub.Leave(session)
 
 	ackBytes, errAck := protocol.EncodeJoinAck(room, client)
 	if errAck != nil {
@@ -195,7 +195,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 					}
 					continue
 				}
-				errDelta := rs.storage.SaveSnapshotRoom(session.roomID, *snapshot.Delta)
+				errDelta := rs.Storage.SaveSnapshotRoom(session.roomID, *snapshot.Delta)
 				if errDelta != nil {
 					errSend := session.SendErrorMessage(protocol.InternalError, protocol.InternalErrorMessage)
 					if errSend != nil {
@@ -206,7 +206,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 				continue
 			}
 
-			receiversExist, errBroadcast := rs.hub.BroadcastToRoom(
+			receiversExist, errBroadcast := rs.Hub.BroadcastToRoom(
 				session,
 				message,
 			)
@@ -235,7 +235,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 			if !receiversExist && formattedType == protocol.OpSync1 {
 				var emptyDelta protocol.Delta
 
-				delta, errDelta := rs.storage.LoadInternalSnapshot(session.roomID)
+				delta, errDelta := rs.Storage.LoadInternalSnapshot(session.roomID)
 				if errDelta != nil {
 					if errors.Is(errDelta, storage.ErrSnapshotNotFound) {
 						sync2, errSync2 := internalSync.EncodeSyncStep2(emptyDelta)

@@ -8,10 +8,10 @@ import (
 )
 
 type RelayServer struct {
-	hub        *Hub
-	address    string
-	serverHTTP *http.Server
-	storage    *storage.Storage
+	Hub        *Hub
+	Address    string
+	ServerHTTP *http.Server
+	Storage    *storage.Storage
 }
 
 func NewRelayServer(path string, address string) (*RelayServer, error) {
@@ -21,29 +21,28 @@ func NewRelayServer(path string, address string) (*RelayServer, error) {
 		return &RelayServer{}, errStorage
 	}
 	hubRelay := NewHub()
-	relay := RelayServer{hub: hubRelay}
-	relay.address = address
-	relay.storage = &newStorage
+	relay := RelayServer{Hub: hubRelay}
+	relay.Address = address
+	relay.Storage = &newStorage
 	return &relay, nil
 }
 
-func (rs *RelayServer) Start() error {
-
-	mux := http.NewServeMux()
-	defer rs.storage.CloseDB()
-
-	mux.HandleFunc("/", run)
-	mux.HandleFunc("/ws", rs.ws)
+func (rs *RelayServer) Start(mux *http.ServeMux) error {
 
 	server := &http.Server{
-		Addr:           rs.address,
+		Addr:           rs.Address,
 		Handler:        mux,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	rs.serverHTTP = server
+	rs.ServerHTTP = server
 
 	return server.ListenAndServe()
+}
+
+func (rs *RelayServer) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/", run)
+	mux.HandleFunc("/ws", rs.ws)
 }

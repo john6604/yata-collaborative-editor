@@ -26,7 +26,7 @@ func startWebSocketTestServer(t *testing.T) string {
 		t.Fatalf("NewRelayServer() returned an unexpected error: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := relayServer.storage.CloseDB(); err != nil {
+		if err := relayServer.Storage.CloseDB(); err != nil {
 			t.Errorf("CloseDB() returned an unexpected error: %v", err)
 		}
 	})
