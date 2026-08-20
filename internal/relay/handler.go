@@ -87,7 +87,26 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	defer rs.Hub.Leave(session)
+	defer func() {
+		roomID := session.roomID
+
+		rs.Hub.Leave(session)
+
+		users, err := rs.Hub.GetActiveUsers(roomID)
+		if err != nil {
+			return
+		}
+
+		messagePresence, err := internalSync.EncodePresence(users)
+		if err != nil {
+			return
+		}
+
+		errBroadcast := rs.Hub.BroadcastToAllInRoom(roomID, messagePresence)
+		if errBroadcast != nil {
+			return
+		}
+	}()
 
 	ackBytes, errAck := protocol.EncodeJoinAck(room, client)
 	if errAck != nil {
@@ -100,6 +119,21 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 
 	errSend := session.Send(ackBytes)
 	if errSend != nil {
+		return
+	}
+
+	users, errUsers := rs.Hub.GetActiveUsers(room)
+	if errUsers != nil {
+		return
+	}
+
+	messagePresence, errPresence := internalSync.EncodePresence(users)
+	if errPresence != nil {
+		return
+	}
+
+	errBroadcast := rs.Hub.BroadcastToAllInRoom(room, messagePresence)
+	if errBroadcast != nil {
 		return
 	}
 
@@ -203,6 +237,8 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 					}
 					continue
 				}
+				continue
+			} else if formattedType == protocol.OpPresence {
 				continue
 			}
 

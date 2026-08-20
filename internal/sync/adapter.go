@@ -326,6 +326,41 @@ func EncodeSnapshot(delta protocol.Delta) ([]byte, error) {
 	return envelopeBytes, nil
 }
 
+func EncodePresence(users []string) ([]byte, error) {
+
+	presenceOperation := protocol.PresenceOp{
+		Type:  protocol.OpPresence,
+		Users: users,
+	}
+
+	presenceEnvelope, err := json.Marshal(presenceOperation)
+	if err != nil {
+		return nil, err
+	}
+
+	updatePayload := protocol.UpdatePayload{
+		Operation: presenceEnvelope,
+	}
+
+	updateEnvelope, errUpdate := json.Marshal(updatePayload)
+	if errUpdate != nil {
+		return nil, errUpdate
+	}
+
+	envelope := protocol.Envelope{
+		Version:     protocol.SupportedVersion,
+		MessageType: protocol.TypeUpdate,
+		Payload:     updateEnvelope,
+	}
+
+	envelopeBytes, errEnvelope := json.Marshal(envelope)
+	if errEnvelope != nil {
+		return nil, errEnvelope
+	}
+
+	return envelopeBytes, nil
+}
+
 func EncodeUpdateOperation(convertedOperation ConvertedOperation) ([]byte, error) {
 
 	var operation []byte

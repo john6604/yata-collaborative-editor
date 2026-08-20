@@ -121,6 +121,35 @@ func (h *Hub) CountClients(roomID string) (int, error) {
 	return len(room.clients), nil
 }
 
+func (h *Hub) GetActiveUsers(roomID string) ([]string, error) {
+
+	formattedRoomID := strings.TrimSpace(roomID)
+	if len(formattedRoomID) == 0 {
+		return nil, errors.New("Room ID does not exist.")
+	}
+
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	room, exists := h.rooms[formattedRoomID]
+
+	if !exists {
+		return nil, errors.New("Room does not exist.")
+	}
+
+	var users []string
+
+	for _, client := range room.clients {
+		users = append(users, client.clientID)
+	}
+
+	if len(users) == 0 {
+		return []string{}, nil
+	}
+
+	return users, nil
+}
+
 func (h *Hub) HasClient(roomID string, clientID string) (bool, error) {
 
 	formattedRoomID := strings.TrimSpace(roomID)
@@ -200,4 +229,43 @@ func (h *Hub) BroadcastToRoom(senderSession *ClientSession, message []byte) (boo
 	}
 
 	return true, nil
+}
+
+func (h *Hub) BroadcastToAllInRoom(roomID string, message []byte) error {
+
+	formattedRoomID := strings.TrimSpace(roomID)
+	if len(formattedRoomID) == 0 {
+		return errors.New("Room ID does not exist.")
+	}
+
+	h.mutex.RLock()
+
+	room, exists := h.rooms[formattedRoomID]
+	if !exists {
+		h.mutex.RUnlock()
+		return errors.New("Room does not exist.")
+	}
+
+	var clients []*ClientSession
+
+	for _, client := range room.clients {
+		if client.webSocket != nil {
+			clients = append(clients, client)
+		}
+	}
+
+	h.mutex.RUnlock()
+
+	if len(clients) == 0 {
+		return nil
+	}
+
+	for _, c := range clients {
+		errSend := c.Send(message)
+		if errSend != nil {
+			continue
+		}
+	}
+
+	return nil
 }

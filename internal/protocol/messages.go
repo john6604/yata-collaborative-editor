@@ -21,6 +21,7 @@ var OpDelete = "delete"
 var OpSync1 = "sync_step1"
 var OpSync2 = "sync_step2"
 var OpSnapshot = "snapshot"
+var OpPresence = "presence"
 
 var InternalError = "internal_error"
 var InternalErrorMessage = "Server internal error."
@@ -101,6 +102,11 @@ type SnapshotOp struct {
 	Delta *Delta `json:"delta"`
 }
 
+type PresenceOp struct {
+	Type  string   `json:"type"`
+	Users []string `json:"users"`
+}
+
 func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
 
 	var msg Envelope
@@ -142,7 +148,7 @@ func DecodeUpdate(message []byte) (UpdatePayload, error) {
 		return UpdatePayload{}, errors.New("invalid_payload")
 	}
 
-	if formattedType != OpInsert && formattedType != OpDelete && formattedType != OpSync1 && formattedType != OpSync2 && formattedType != OpSnapshot {
+	if formattedType != OpInsert && formattedType != OpDelete && formattedType != OpSync1 && formattedType != OpSync2 && formattedType != OpSnapshot && formattedType != OpPresence {
 		return UpdatePayload{}, errors.New("invalid_payload")
 	}
 
@@ -166,6 +172,16 @@ func DecodeUpdate(message []byte) (UpdatePayload, error) {
 		_, errSync2 := DecodeSync2(payload)
 		if errSync2 != nil {
 			return UpdatePayload{}, errSync2
+		}
+	case OpSnapshot:
+		_, errSnapshot := DecodeSnapshot(payload)
+		if errSnapshot != nil {
+			return UpdatePayload{}, errSnapshot
+		}
+	case OpPresence:
+		_, errPresence := DecodePresence(payload)
+		if errPresence != nil {
+			return UpdatePayload{}, errPresence
 		}
 	}
 
@@ -387,4 +403,20 @@ func DecodeSnapshot(payloadSnapshot UpdatePayload) (SnapshotOp, error) {
 	}
 
 	return snapshotBytes, nil
+}
+
+func DecodePresence(payloadPresence UpdatePayload) (PresenceOp, error) {
+
+	var presenceBytes PresenceOp
+
+	err := json.Unmarshal(payloadPresence.Operation, &presenceBytes)
+	if err != nil {
+		return PresenceOp{}, err
+	}
+
+	if presenceBytes.Users == nil {
+		return PresenceOp{}, errors.New("missing_field")
+	}
+
+	return presenceBytes, nil
 }
