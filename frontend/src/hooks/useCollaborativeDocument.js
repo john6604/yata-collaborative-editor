@@ -4,11 +4,12 @@ import { encodeJoin } from "../protocol/operationsEncoder";
 import { decodeIncomingMessage } from "../protocol/envelopeDecoder";
 import { generateSnapshot, generateSync1, generateSync2 } from "../sync/vector";
 import { encodeEnvelope } from "../protocol/envelopeEncoder";
-import { DeleteOperation, InsertOperation, SnapshotOperation, Sync1Operation, Sync2Operation } from "../crdt/operations";
+import { DeleteOperation, InsertOperation, PresenceOperation, SnapshotOperation, Sync1Operation, Sync2Operation } from "../crdt/operations";
 
 export function useCollaborativeDocument(documentID, displayName, editorRef) {
     const [connectionStatus, setConnectionStatus] = useState("disconnected");
     const [content, setContent] = useState("");
+    const [users, setUsers] = useState([]);
 
     const document = useRef(null);
     const websocket = useRef(null);
@@ -84,6 +85,8 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                         }
                         setContent(document.current.visibleContent());
                     }
+                } else if (messageType === "update" && operation instanceof PresenceOperation) {
+                    setUsers(operation.users);
                 }
 
                 if (messageType === "update" && operation instanceof InsertOperation) {
@@ -456,6 +459,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         document,
         websocket,
         pendingOperations,
+        users,
         handleInput,
         handleCompositionEnd,
     };

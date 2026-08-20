@@ -16,10 +16,9 @@ function EditorPage({
   isSidebarCollapsed,
   onToggleSidebar,
   pendingCount,
-  users,
 }) {
   const { documentId } = useParams();
-  const { connectionStatus, content, handleInput, handleCompositionEnd } = useCollaborativeDocument(documentId, displayName, editorRef);
+  const { connectionStatus, content, users, handleInput, handleCompositionEnd } = useCollaborativeDocument(documentId, displayName, editorRef);
   const document = useMemo(() => {
     return documents.find((currentDocument) => currentDocument.id === documentId);
   }, [documentId, documents]);

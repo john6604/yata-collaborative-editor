@@ -31,3 +31,9 @@ export class SnapshotOperation {
         this.delta = delta;
     }
 }
+
+export class PresenceOperation {
+    constructor(users) {
+        this.users = users;
+    }
+}

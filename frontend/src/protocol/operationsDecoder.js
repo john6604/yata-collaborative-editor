@@ -1,4 +1,4 @@
-import { InsertOperation, DeleteOperation, Sync1Operation, Sync2Operation, SnapshotOperation } from "../crdt/operations";
+import { InsertOperation, DeleteOperation, Sync1Operation, Sync2Operation, SnapshotOperation, PresenceOperation } from "../crdt/operations";
 import { validateID } from "../crdt/identifier";
 
 function isPlainObject(value) {
@@ -90,6 +90,20 @@ function validateDelta(delta) {
             validateGoDeleteOperation(deletion);
         }
     }
+}
+
+function validateUsers(users) {
+    if (!Array.isArray(users)) {
+        throw new Error("users must be an array");
+    }
+
+    for (const user of users) {
+        if (typeof user !== "string") {
+            throw new Error("invalid user");
+        }
+    }
+
+    return users;
 }
 
 export function decodeInsertion(message) {
@@ -216,6 +230,24 @@ export function decodeSnapshot(message) {
     const delta = decodeDelta(message.delta);
 
     return new SnapshotOperation(delta);
+}
+
+export function decodePresence(message) {
+    if (message === undefined || message === null) {
+        throw new Error("invalid message");
+    }
+
+    if (message.type === undefined || message.type === null || message.users === undefined || message.users === null ) {
+        throw new Error("missing field");
+    }
+
+    if (message.type !== "presence") {
+        throw new Error("unsupported operation");
+    }
+
+    const users = validateUsers(message.users);
+
+    return new PresenceOperation(users);
 }
 
 export function decodeDelta(delta) {

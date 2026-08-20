@@ -54,7 +54,6 @@ const createDocumentId = () => {
 function App() {
   const [displayName, setDisplayName] = useState('');
   const [documents, setDocuments] = useState([]);
-  const [users, setUsers] = useState([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cursorLine, setCursorLine] = useState(1);
   const [cursorCol, setCursorCol] = useState(1);
@@ -308,7 +307,6 @@ function App() {
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebar={toggleSidebar}
               pendingCount={pendingCount}
-              users={users}
             />
           )}
         />
