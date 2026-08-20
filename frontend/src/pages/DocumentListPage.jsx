@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useHistory } from 'react-router-dom';
 
 function DocumentListPage({ displayName, documents, onCreateDocument, onRenameDocument }) {
   const history = useHistory();
+  const [names, setNames] = useState({});
 
   const handleCreateDocument = () => {
     const document = onCreateDocument();
@@ -52,10 +54,24 @@ function DocumentListPage({ displayName, documents, onCreateDocument, onRenameDo
                   <span className="sr-only">Document name</span>
                   <input
                     className="w-full rounded-md border border-transparent bg-slate-50 px-3 py-2 text-base font-semibold text-slate-950 outline-none transition hover:border-slate-200 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-200"
-                    onChange={(event) => onRenameDocument(document.id, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        const name = names[document.id] ?? document.name;
+
+                        if (name.trim() !== '') {
+                          onRenameDocument(document.id, name);
+                        }
+                      }
+                    }}
+                    onChange={(event) => {
+                      setNames((currentNames) => ({
+                        ...currentNames,
+                        [document.id]: event.target.value,
+                      }));
+                    }}
                     placeholder="Untitled Document"
                     type="text"
-                    value={document.name}
+                    value={names[document.id] ?? document.name}
                   />
                 </label>
 

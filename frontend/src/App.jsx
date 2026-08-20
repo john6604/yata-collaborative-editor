@@ -17,13 +17,31 @@ import EntryPage from './pages/EntryPage.jsx';
 // editorRef - ref to editor DOM element
 // =======================================
 
-const INITIAL_DOCUMENTS = [
-  {
-    id: 'portfolio-draft',
-    name: 'Untitled Document',
-    createdAt: '2026-08-05T00:00:00.000Z',
-  },
-];
+// Implement an API to get documents
+/*
+initial value:
+fecth(URL) -> this returns a Promise
+
+Luego necesito convertir la respuesta a JSON
+
+const response = await fetch(URL)
+const json = await response.json()
+
+El lugar para hacer un fetch es en un useEffect()
+
+useState empezara como array vacio inicialmente hasta que se ejecute el fecth
+
+se maneja errores asi:
+if (!response.ok) {
+    // manejar error
+}
+
+fetch al ser asincrono se deberia utilizar
+await y async
+
+
+
+*/
 
 const createDocumentId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -35,7 +53,7 @@ const createDocumentId = () => {
 
 function App() {
   const [displayName, setDisplayName] = useState('');
-  const [documents, setDocuments] = useState(INITIAL_DOCUMENTS);
+  const [documents, setDocuments] = useState([]);
   const [users, setUsers] = useState([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cursorLine, setCursorLine] = useState(1);
@@ -151,28 +169,110 @@ function App() {
     return displayName.trim() || 'Guest';
   }, [displayName]);
 
-  const createDocument = useCallback(() => {
-    const newDocument = {
-      id: createDocumentId(),
-      name: `Untitled Document ${documents.length + 1}`,
-      createdAt: new Date().toISOString(),
-    };
+  // async functions to make HTTP requests
+  
+  const getDocuments = async() => {
+    try {
+      const response = await fetch("http://localhost:8181/api/documents");
 
-    setDocuments((currentDocuments) => [newDocument, ...currentDocuments]);
-    return newDocument;
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const documents = data.map((document) => {
+        return {
+          id: document.document_id,
+          name: document.document_name,
+          createdAt: document.created_at,
+          updatedAt: document.updated_at,
+        };
+      });
+      setDocuments(documents);
+    } catch (err) {
+      console.error("error obtaining documents.", err);
+    }
+  }
+
+  const createDocument = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:8181/api/documents", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: `Untitled Document ${documents.length + 1}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`)
+      }
+
+      const data = await response.json();
+      
+      const newDocument = {
+        id: data.document_id,
+        name: data.document_name,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+
+      setDocuments((currentDocuments) => [newDocument, ...currentDocuments]);
+      return newDocument;
+    } catch (err) {
+      console.error("error creating document.", err);
+    }
+    
   }, [documents.length]);
 
-  const renameDocument = useCallback((documentId, nextName) => {
-    setDocuments((currentDocuments) =>
-      currentDocuments.map((document) =>
-        document.id === documentId ? { ...document, name: nextName } : document,
-      ),
-    );
+  const renameDocument = useCallback(async (documentID, nextName) => {
+    try {
+      const response = await fetch(`http://localhost:8181/api/documents/${documentID}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: nextName
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const documentRenamed = {
+        id: data.document_id,
+        name: data.document_name,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      }
+
+      setDocuments((currentDocuments) =>
+        currentDocuments.map((document) =>
+          document.id === documentRenamed.id ? documentRenamed : document,
+        ),
+      );
+
+    } catch (err) {
+      console.error("could not rename the document.", err);
+    }
   }, []);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed((currentValue) => !currentValue);
   }, []);
+
+  // useEffects to load status
+  useEffect(() => {
+    getDocuments();
+  }, [])
+
 
   return (
     <>

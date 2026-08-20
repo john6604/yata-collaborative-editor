@@ -31,7 +31,7 @@ func (rs *RelayServer) Start(mux *http.ServeMux) error {
 
 	server := &http.Server{
 		Addr:           rs.Address,
-		Handler:        mux,
+		Handler:        corsMiddleware(mux),
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
