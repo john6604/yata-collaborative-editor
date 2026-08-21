@@ -17,6 +17,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     const pendingSelection = useRef(null);
     const beforeInputState = useRef(null);
     const connectionStatusRef = useRef("disconnected");
+    const clientIDRef = useRef(getOrCreateRelayClientID());
 
     if (document.current === null) {
         document.current = new Document();
@@ -34,7 +35,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
             websocket.current = ws;
             updateConnectionStatus("connecting");
             ws.onopen = () => {
-                const joinMessage = encodeJoin(documentID, displayName);
+                const joinMessage = encodeJoin(documentID, clientIDRef.current, displayName);
                 const json = JSON.stringify(joinMessage);
 
                 ws.send(json);
@@ -451,6 +452,32 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
             const jsonSnapshot = JSON.stringify(snapshotEnvelope);
             websocket.current.send(jsonSnapshot);
         }
+    }
+
+    function generateUUID() {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+        return [
+            [...bytes.slice(0, 4)].map(b => b.toString(16).padStart(2, "0")).join(""),
+            [...bytes.slice(4, 6)].map(b => b.toString(16).padStart(2, "0")).join(""),
+            [...bytes.slice(6, 8)].map(b => b.toString(16).padStart(2, "0")).join(""),
+            [...bytes.slice(8, 10)].map(b => b.toString(16).padStart(2, "0")).join(""),
+            [...bytes.slice(10, 16)].map(b => b.toString(16).padStart(2, "0")).join("")
+        ].join("-");
+    }
+
+    function getOrCreateRelayClientID() {
+        if (sessionStorage.getItem("client_id") !== null) {
+            return sessionStorage.getItem("client_id");
+        }
+
+        const newClientID = generateUUID();
+        sessionStorage.setItem("client_id", newClientID);
+        return newClientID;
     }
 
     return {

@@ -52,7 +52,12 @@ const createDocumentId = () => {
 };
 
 function App() {
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState(() => {
+    if (sessionStorage.getItem("display_name") !== null) {
+      return sessionStorage.getItem("display_name");
+    }
+    return "";
+  });
   const [documents, setDocuments] = useState([]);
   const [characterCount, setCharacterCount] = useState(0);
   const [cursorLine, setCursorLine] = useState(1);
@@ -267,11 +272,15 @@ function App() {
     setIsSidebarCollapsed((currentValue) => !currentValue);
   }, []);
 
-  // useEffects to load status
+  // useEffect to load status
   useEffect(() => {
     getDocuments();
   }, [])
 
+  function updateDisplayName(name) {
+    setDisplayName(name);
+    sessionStorage.setItem("display_name", name);
+  }
 
   return (
     <>
@@ -280,7 +289,7 @@ function App() {
           exact
           path="/"
           render={() => (
-            <EntryPage displayName={displayName} onDisplayNameChange={setDisplayName} />
+            <EntryPage displayName={displayName} onDisplayNameChange={updateDisplayName} />
           )}
         />
         <Route

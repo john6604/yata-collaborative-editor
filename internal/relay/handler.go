@@ -67,7 +67,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	room, client, errJoin := protocol.DecodeJoin(payloadJoin)
+	room, client, name, errJoin := protocol.DecodeJoin(payloadJoin)
 	if errJoin != nil {
 		SendErrorMessage(
 			protocol.InvalidPayload,
@@ -77,7 +77,7 @@ func (rs *RelayServer) ws(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	session, errJoinHub := rs.Hub.Join(room, client, conn)
+	session, errJoinHub := rs.Hub.Join(room, client, name, conn)
 	if errJoinHub != nil {
 		SendErrorMessage(
 			protocol.InternalError,

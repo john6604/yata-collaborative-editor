@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/john6604/yata-collaborative-editor/internal/identifier"
+	"github.com/john6604/yata-collaborative-editor/internal/presence"
 )
 
 var SupportedVersion = 1
@@ -53,6 +54,7 @@ type Envelope struct {
 type JoinPayload struct {
 	RoomID   string `json:"room"`
 	ClientID string `json:"client_id"`
+	Name     string `json:"name"`
 }
 
 type JoinAckPayload struct {
@@ -103,8 +105,8 @@ type SnapshotOp struct {
 }
 
 type PresenceOp struct {
-	Type  string   `json:"type"`
-	Users []string `json:"users"`
+	Type  string                   `json:"type"`
+	Users []*presence.PresenceUser `json:"users"`
 }
 
 func DecodeEnvelope(message []byte) (int, string, json.RawMessage, error) {
@@ -188,31 +190,37 @@ func DecodeUpdate(message []byte) (UpdatePayload, error) {
 	return payload, nil
 }
 
-func DecodeJoin(message json.RawMessage) (string, string, error) {
+func DecodeJoin(message json.RawMessage) (string, string, string, error) {
 
 	var joinPayload JoinPayload
 
 	err := json.Unmarshal(message, &joinPayload)
 
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	roomID := joinPayload.RoomID
 	clientID := joinPayload.ClientID
+	name := joinPayload.Name
 
 	formattedRoomID := strings.TrimSpace(roomID)
 	formattedClientID := strings.TrimSpace(clientID)
+	formattedName := strings.TrimSpace(name)
 
 	if formattedClientID == "" {
-		return "", "", errors.New("Client ID is empty.")
+		return "", "", "", errors.New("Client ID is empty.")
 	}
 
 	if formattedRoomID == "" {
-		return "", "", errors.New("Room is empty.")
+		return "", "", "", errors.New("Room is empty.")
 	}
 
-	return formattedRoomID, formattedClientID, nil
+	if formattedName == "" {
+		return "", "", "", errors.New("Name is empty.")
+	}
+
+	return formattedRoomID, formattedClientID, formattedName, nil
 }
 
 func DecodeJoinAck(message json.RawMessage) (string, string, error) {

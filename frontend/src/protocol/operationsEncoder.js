@@ -140,22 +140,24 @@ export function encodeUpdate(message) {
     return operation
 }
 
-export function encodeJoin(roomID, clientID) {
+export function encodeJoin(roomID, clientID, name) {
     
-    if (typeof roomID !== "string" || typeof clientID !== "string") {
+    if (typeof roomID !== "string" || typeof clientID !== "string" || typeof name !== "string") {
         throw new Error("field must be a string");
     }
     
     const room = roomID.trim();
     const client = clientID.trim();
+    const displayName = name.trim();
 
-    if (room === "" || client === "") {
+    if (room === "" || client === "" || displayName === "") {
         throw new Error("empty field")
     }
 
     const payload = {
         room: room,
         client_id: client,
+        name: displayName,
     }
 
     const msg = {

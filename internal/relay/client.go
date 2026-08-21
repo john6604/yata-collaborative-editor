@@ -10,13 +10,15 @@ import (
 type ClientSession struct {
 	clientID   string
 	roomID     string
+	name       string
 	webSocket  *websocket.Conn
 	writeMutex sync.Mutex
 }
 
-func NewClientSession(clientID string, roomID string, conn *websocket.Conn) *ClientSession {
+func NewClientSession(clientID string, roomID string, name string, conn *websocket.Conn) *ClientSession {
 	clientSession := ClientSession{clientID: clientID}
 	clientSession.roomID = roomID
+	clientSession.name = name
 	clientSession.webSocket = conn
 	return &clientSession
 }

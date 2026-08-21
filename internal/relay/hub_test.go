@@ -28,7 +28,7 @@ func TestJoinCreatesRoomAndRegistersClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A", nil)
+	session, err := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -87,7 +87,7 @@ func TestJoinRegistersTwoClientsInSameRoom(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err := hub.Join("room-1", "client-A", nil)
+	session1, err := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -97,7 +97,7 @@ func TestJoinRegistersTwoClientsInSameRoom(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err1 := hub.Join("room-1", "client-B", nil)
+	session2, err1 := hub.Join("room-1", "client-B", "Bob", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -168,11 +168,60 @@ func TestJoinRegistersTwoClientsInSameRoom(t *testing.T) {
 	}
 }
 
+func TestGetActiveUsersReturnsClientIDsAndNames(t *testing.T) {
+
+	hub := relay.NewHub()
+
+	_, err1 := hub.Join("room-1", "client-A", "Alice", nil)
+
+	if err1 != nil {
+		t.Fatalf("An error %s occurred", err1)
+	}
+
+	_, err2 := hub.Join("room-1", "client-B", "Bob", nil)
+
+	if err2 != nil {
+		t.Fatalf("An error %s occurred", err2)
+	}
+
+	users, errUsers := hub.GetActiveUsers("room-1")
+
+	if errUsers != nil {
+		t.Fatalf("An error %s occurred", errUsers)
+	}
+
+	gotUsers := make(map[string]string)
+
+	for _, user := range users {
+		gotUsers[user.Id] = user.Name
+	}
+
+	expectedUsers := map[string]string{
+		"client-A": "Alice",
+		"client-B": "Bob",
+	}
+
+	if len(gotUsers) != len(expectedUsers) {
+		t.Fatalf("%d users were expected, but got %d users.", len(expectedUsers), len(gotUsers))
+	}
+
+	for id, name := range expectedUsers {
+		gotName, exists := gotUsers[id]
+		if !exists {
+			t.Fatalf("%s was expected in active users.", id)
+		}
+
+		if gotName != name {
+			t.Fatalf("%s name was expected to be %s, but got %s.", id, name, gotName)
+		}
+	}
+}
+
 func TestJoinRejectsDuplicateClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A", nil)
+	session1, err1 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -182,7 +231,7 @@ func TestJoinRejectsDuplicateClient(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err2 := hub.Join("room-1", "client-A", nil)
+	session2, err2 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err2 == nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -242,7 +291,7 @@ func TestSameClientIDCanJoinDifferentRooms(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A", nil)
+	session1, err1 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -252,7 +301,7 @@ func TestSameClientIDCanJoinDifferentRooms(t *testing.T) {
 		t.Fatal("An error occurred.")
 	}
 
-	session2, err2 := hub.Join("room-2", "client-A", nil)
+	session2, err2 := hub.Join("room-2", "client-A", "Alice", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -298,13 +347,13 @@ func TestLeaveRemovesOnlySelectedClient(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session1, err1 := hub.Join("room-1", "client-A", nil)
+	session1, err1 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
 	}
 
-	_, err2 := hub.Join("room-1", "client-B", nil)
+	_, err2 := hub.Join("room-1", "client-B", "Bob", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -364,7 +413,7 @@ func TestLeaveLastClientRemovesRoom(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A", nil)
+	session, err := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -394,7 +443,7 @@ func TestLeaveTwiceDoesNotPanic(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	session, err := hub.Join("room-1", "client-A", nil)
+	session, err := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err != nil {
 		t.Fatalf("An error %s occurred", err)
@@ -437,7 +486,7 @@ func TestOldSessionDoesNotRemoveNewSession(t *testing.T) {
 
 	hub := relay.NewHub()
 
-	oldSession, err1 := hub.Join("room-1", "client-A", nil)
+	oldSession, err1 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err1 != nil {
 		t.Fatalf("An error %s occurred", err1)
@@ -445,7 +494,7 @@ func TestOldSessionDoesNotRemoveNewSession(t *testing.T) {
 
 	hub.Leave(oldSession)
 
-	newSession, err2 := hub.Join("room-1", "client-A", nil)
+	newSession, err2 := hub.Join("room-1", "client-A", "Alice", nil)
 
 	if err2 != nil {
 		t.Fatalf("An error %s occurred", err2)
@@ -513,7 +562,7 @@ func TestJoinRejectsEmptyRoomIDAndClientID(t *testing.T) {
 
 			hub := relay.NewHub()
 
-			session, err := hub.Join(tt.roomID, tt.clientID, nil)
+			session, err := hub.Join(tt.roomID, tt.clientID, "Alice", nil)
 
 			if err == nil {
 				t.Fatal("An error was expected.")
@@ -556,7 +605,7 @@ func TestHubConcurrentJoinLeaveAndRead(t *testing.T) {
 			roomID := fmt.Sprintf("room-%d", index%5)
 			clientID := fmt.Sprintf("client-%d", index)
 
-			session, err := hub.Join(roomID, clientID, nil)
+			session, err := hub.Join(roomID, clientID, fmt.Sprintf("User %d", index), nil)
 
 			if err != nil {
 				errs <- err

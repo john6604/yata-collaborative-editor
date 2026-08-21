@@ -18,6 +18,8 @@ var (
 	websocketEndID   = identifier.ID{ClientID: "END", Clock: -2}
 )
 
+const testWebSocketOrigin = "http://localhost:5173"
+
 func startWebSocketTestServer(t *testing.T) string {
 	t.Helper()
 
@@ -38,9 +40,16 @@ func startWebSocketTestServer(t *testing.T) string {
 }
 
 func dialJoinedClient(t *testing.T, url string, roomID string, clientID string) *websocket.Conn {
+	return dialJoinedClientWithName(t, url, roomID, clientID, clientID)
+}
+
+func dialJoinedClientWithName(t *testing.T, url string, roomID string, clientID string, name string) *websocket.Conn {
 	t.Helper()
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	header := http.Header{}
+	header.Set("Origin", testWebSocketOrigin)
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		t.Fatalf("Dial() returned an unexpected error: %v", err)
 	}
@@ -53,6 +62,7 @@ func dialJoinedClient(t *testing.T, url string, roomID string, clientID string) 
 	message := envelopeBytes(t, protocol.TypeJoin, map[string]string{
 		"room":      roomID,
 		"client_id": clientID,
+		"name":      name,
 	})
 
 	if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -67,7 +77,81 @@ func dialJoinedClient(t *testing.T, url string, roomID string, clientID string) 
 		t.Fatalf("join ack message type = %d; expected %d", messageType, websocket.TextMessage)
 	}
 
+	assertNextPresenceContains(t, conn, clientID, name)
+
 	return conn
+}
+
+func assertNextPresenceContains(t *testing.T, conn *websocket.Conn, clientID string, name string) {
+	t.Helper()
+
+	presence := readNextPresence(t, conn)
+
+	for _, user := range presence.Users {
+		if user.Id == clientID && user.Name == name {
+			return
+		}
+	}
+
+	t.Fatalf("presence users did not contain client %q with name %q", clientID, name)
+}
+
+func readNextPresence(t *testing.T, conn *websocket.Conn) protocol.PresenceOp {
+	t.Helper()
+
+	messageType, received, err := readWebSocketMessage(t, conn)
+	if err != nil {
+		t.Fatalf("ReadMessage(presence) returned an unexpected error: %v", err)
+	}
+	if messageType != websocket.TextMessage {
+		t.Fatalf("presence message type = %d; expected %d", messageType, websocket.TextMessage)
+	}
+
+	var envelope protocol.Envelope
+	if err := json.Unmarshal(received, &envelope); err != nil {
+		t.Fatalf("json.Unmarshal(presence envelope) returned an unexpected error: %v", err)
+	}
+	if envelope.MessageType != protocol.TypeUpdate {
+		t.Fatalf("presence envelope type = %q; expected %q", envelope.MessageType, protocol.TypeUpdate)
+	}
+
+	var payload protocol.UpdatePayload
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+		t.Fatalf("json.Unmarshal(presence update payload) returned an unexpected error: %v", err)
+	}
+
+	var presence protocol.PresenceOp
+	if err := json.Unmarshal(payload.Operation, &presence); err != nil {
+		t.Fatalf("json.Unmarshal(presence operation) returned an unexpected error: %v", err)
+	}
+	if presence.Type != protocol.OpPresence {
+		t.Fatalf("presence operation type = %q; expected %q", presence.Type, protocol.OpPresence)
+	}
+
+	return presence
+}
+
+func assertPresenceUsers(t *testing.T, presence protocol.PresenceOp, expectedUsers map[string]string) {
+	t.Helper()
+
+	gotUsers := make(map[string]string)
+	for _, user := range presence.Users {
+		gotUsers[user.Id] = user.Name
+	}
+
+	if len(gotUsers) != len(expectedUsers) {
+		t.Fatalf("%d presence users were expected, but got %d", len(expectedUsers), len(gotUsers))
+	}
+
+	for clientID, name := range expectedUsers {
+		gotName, exists := gotUsers[clientID]
+		if !exists {
+			t.Fatalf("presence users did not contain client %q", clientID)
+		}
+		if gotName != name {
+			t.Fatalf("presence user %q name = %q; expected %q", clientID, gotName, name)
+		}
+	}
 }
 
 func readWebSocketMessage(t *testing.T, conn *websocket.Conn) (int, []byte, error) {
@@ -152,6 +236,18 @@ func TestWebSocketBroadcastsInsertCharactersAsStrings(t *testing.T) {
 			t.Fatalf("broadcasted message = %s; expected %s", received, message)
 		}
 	}
+}
+
+func TestWebSocketBroadcastsPresenceWithActiveUsers(t *testing.T) {
+	url := startWebSocketTestServer(t)
+	alice := dialJoinedClientWithName(t, url, "room-1", "client-A", "Alice")
+	dialJoinedClientWithName(t, url, "room-1", "client-B", "Bob")
+
+	presence := readNextPresence(t, alice)
+	assertPresenceUsers(t, presence, map[string]string{
+		"client-A": "Alice",
+		"client-B": "Bob",
+	})
 }
 
 func TestWebSocketRejectsInvalidInsertCharacters(t *testing.T) {

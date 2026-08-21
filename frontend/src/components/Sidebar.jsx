@@ -31,7 +31,7 @@ function Sidebar({ isCollapsed, onToggle, users = fallbackUsers }) {
                   <span
                     aria-hidden="true"
                     className="h-9 w-9 shrink-0 rounded-full border border-white/20"
-                    style={{ backgroundColor: user.color }}
+                    style={{ backgroundColor: "green" }}
                   />
                   <span className="min-w-0 truncate text-sm font-medium text-slate-100">
                     {user.name}

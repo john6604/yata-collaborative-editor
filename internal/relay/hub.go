@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/john6604/yata-collaborative-editor/internal/presence"
 )
 
 var ErrNotJoined = errors.New("not_joined")
@@ -20,7 +21,7 @@ func NewHub() *Hub {
 	return &hub
 }
 
-func (h *Hub) Join(roomID string, clientID string, conn *websocket.Conn) (*ClientSession, error) {
+func (h *Hub) Join(roomID string, clientID string, name string, conn *websocket.Conn) (*ClientSession, error) {
 
 	newRoomID := strings.TrimSpace(roomID)
 
@@ -50,7 +51,7 @@ func (h *Hub) Join(roomID string, clientID string, conn *websocket.Conn) (*Clien
 		return nil, errors.New("Client already exists.")
 	}
 
-	clientSession := NewClientSession(newClientID, newRoomID, conn)
+	clientSession := NewClientSession(newClientID, newRoomID, name, conn)
 
 	room.clients[newClientID] = clientSession
 
@@ -121,7 +122,7 @@ func (h *Hub) CountClients(roomID string) (int, error) {
 	return len(room.clients), nil
 }
 
-func (h *Hub) GetActiveUsers(roomID string) ([]string, error) {
+func (h *Hub) GetActiveUsers(roomID string) ([]*presence.PresenceUser, error) {
 
 	formattedRoomID := strings.TrimSpace(roomID)
 	if len(formattedRoomID) == 0 {
@@ -137,14 +138,15 @@ func (h *Hub) GetActiveUsers(roomID string) ([]string, error) {
 		return nil, errors.New("Room does not exist.")
 	}
 
-	var users []string
+	var users []*presence.PresenceUser
 
 	for _, client := range room.clients {
-		users = append(users, client.clientID)
+		user := presence.NewPresenceUser(client.clientID, client.name)
+		users = append(users, user)
 	}
 
 	if len(users) == 0 {
-		return []string{}, nil
+		return []*presence.PresenceUser{}, nil
 	}
 
 	return users, nil

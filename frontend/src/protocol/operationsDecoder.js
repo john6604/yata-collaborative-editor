@@ -97,13 +97,38 @@ function validateUsers(users) {
         throw new Error("users must be an array");
     }
 
+    const validatedUsers = [];
+
     for (const user of users) {
-        if (typeof user !== "string") {
+        if (!isPlainObject(user)) {
             throw new Error("invalid user");
         }
+
+        const id = user.Id ?? user.id;
+        const name = user.Name ?? user.name;
+
+        if (id === undefined || id === null || name === undefined || name === null) {
+            throw new Error("missing field");
+        }
+
+        if (typeof id !== "string" || typeof name !== "string") {
+            throw new Error("field must be a string");
+        }
+
+        const formattedID = id.trim();
+        const formattedName = name.trim();
+
+        if (formattedID === "" || formattedName === "") {
+            throw new Error("field must not be empty");
+        }
+
+        validatedUsers.push({
+            id: formattedID,
+            name: formattedName,
+        });
     }
 
-    return users;
+    return validatedUsers;
 }
 
 export function decodeInsertion(message) {
@@ -320,6 +345,9 @@ export function decodeUpdate(message) {
             break;
         case "snapshot":
             operation = decodeSnapshot(message);
+            break;
+        case "presence":
+            operation = decodePresence(message);
             break;
         default:
             throw new Error("unsupported operation");

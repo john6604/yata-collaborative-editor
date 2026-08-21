@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/john6604/yata-collaborative-editor/internal/document"
+	"github.com/john6604/yata-collaborative-editor/internal/presence"
 	"github.com/john6604/yata-collaborative-editor/internal/protocol"
 )
 
@@ -326,7 +327,7 @@ func EncodeSnapshot(delta protocol.Delta) ([]byte, error) {
 	return envelopeBytes, nil
 }
 
-func EncodePresence(users []string) ([]byte, error) {
+func EncodePresence(users []*presence.PresenceUser) ([]byte, error) {
 
 	presenceOperation := protocol.PresenceOp{
 		Type:  protocol.OpPresence,
