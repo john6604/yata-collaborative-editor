@@ -18,6 +18,8 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     const beforeInputState = useRef(null);
     const connectionStatusRef = useRef("disconnected");
     const clientIDRef = useRef(getOrCreateRelayClientID());
+    const shouldReconnectRef = useRef(true);
+    const reconnectionTimeoutRef = useRef(null);
 
     if (document.current === null) {
         document.current = new Document();
@@ -152,15 +154,32 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
             websocket.current.onclose = () => {
                 updateConnectionStatus("disconnected");
                 console.log("client has been disconnected...");
-                setTimeout(() => {
-                    connect(documentID, displayName);
-                }, 2000);
+                if (shouldReconnectRef.current) {
+                    const timeoutID = setTimeout(() => {
+                        connect(documentID, displayName);
+                    }, 2000);
+                    reconnectionTimeoutRef.current = timeoutID;
+                }
             }
         }
     }
 
     useEffect(() => {
+        shouldReconnectRef.current = true;
         connect(documentID, displayName);
+
+        return() => {
+            shouldReconnectRef.current = false;
+            if (reconnectionTimeoutRef.current !== null) {
+                clearTimeout(reconnectionTimeoutRef.current);
+                reconnectionTimeoutRef.current = null;
+            }
+            websocket.current.onclose = null;
+            if (websocket.current !== null) {
+                websocket.current.close();
+            }
+            websocket.current = null;
+        };
     }, []);
 
     useLayoutEffect(() => {
