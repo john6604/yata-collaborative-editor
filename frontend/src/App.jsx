@@ -9,10 +9,6 @@ import EntryPage from './pages/EntryPage.jsx';
 // displayName / setDisplayName - string used later as client ID
 // documents / setDocuments - [{id, name, createdAt}]
 // users / setUsers - [{id, name, color}]
-// characterCount / setCharacterCount - number
-// cursorLine / setCursorLine - number
-// cursorCol / setCursorCol - number
-// pendingCount / setPendingCount - number
 // toastRef.current.showToast(message, type) - show notification
 // editorRef - ref to editor DOM element
 // =======================================
@@ -59,10 +55,6 @@ function App() {
     return "";
   });
   const [documents, setDocuments] = useState([]);
-  const [characterCount, setCharacterCount] = useState(0);
-  const [cursorLine, setCursorLine] = useState(1);
-  const [cursorCol, setCursorCol] = useState(1);
-  const [pendingCount, setPendingCount] = useState(0);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
   const editorRef = useRef(null);
@@ -88,7 +80,6 @@ function App() {
   // - Capture input events from EditorArea
   // - Translate each keystroke into a CRDT insert or delete operation
   // - Send operations through WebSocket
-  // - Update characterCount and cursorPosition states
   // ==========================
   const handleCrdtEditorInput = () => {};
 
@@ -307,15 +298,11 @@ function App() {
           path="/editor/:documentId"
           render={() => (
             <EditorPage
-              characterCount={characterCount}
-              cursorCol={cursorCol}
-              cursorLine={cursorLine}
               displayName={effectiveDisplayName}
               documents={documents}
               editorRef={editorRef}
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebar={toggleSidebar}
-              pendingCount={pendingCount}
             />
           )}
         />

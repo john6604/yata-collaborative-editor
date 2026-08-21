@@ -7,18 +7,25 @@ import TopBar from '../components/TopBar.jsx';
 import { useCollaborativeDocument } from '../hooks/useCollaborativeDocument.js';
 
 function EditorPage({
-  characterCount,
-  cursorCol,
-  cursorLine,
   displayName,
   documents,
   editorRef,
   isSidebarCollapsed,
   onToggleSidebar,
-  pendingCount,
 }) {
   const { documentId } = useParams();
-  const { connectionStatus, content, users, handleInput, handleCompositionEnd } = useCollaborativeDocument(documentId, displayName, editorRef);
+  const {
+    characterCount,
+    connectionStatus,
+    content,
+    cursorCol,
+    cursorLine,
+    handleCompositionEnd,
+    handleCursorChange,
+    handleInput,
+    pendingCount,
+    users,
+  } = useCollaborativeDocument(documentId, displayName, editorRef);
   const document = useMemo(() => {
     return documents.find((currentDocument) => currentDocument.id === documentId);
   }, [documentId, documents]);
@@ -32,7 +39,15 @@ function EditorPage({
       />
 
       <div className="flex min-h-0 flex-1">
-        <EditorArea ref={editorRef} displayName={displayName} documentId={documentId} onInput={handleInput} onCompositionEnd={handleCompositionEnd} content={content} />
+        <EditorArea
+          ref={editorRef}
+          content={content}
+          displayName={displayName}
+          documentId={documentId}
+          onCompositionEnd={handleCompositionEnd}
+          onCursorChange={handleCursorChange}
+          onInput={handleInput}
+        />
         <Sidebar
           isCollapsed={isSidebarCollapsed}
           onToggle={onToggleSidebar}

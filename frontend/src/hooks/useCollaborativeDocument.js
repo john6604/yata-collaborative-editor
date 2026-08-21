@@ -9,6 +9,8 @@ import { DeleteOperation, InsertOperation, PresenceOperation, SnapshotOperation,
 export function useCollaborativeDocument(documentID, displayName, editorRef) {
     const [connectionStatus, setConnectionStatus] = useState("disconnected");
     const [content, setContent] = useState("");
+    const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
+    const [pendingCount, setPendingCount] = useState(0);
     const [users, setUsers] = useState([]);
 
     const document = useRef(null);
@@ -25,9 +27,43 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         document.current = new Document();
     }
 
+    const characterCount = Array.from(content).length;
+
     function updateConnectionStatus(status) {
         connectionStatusRef.current = status;
         setConnectionStatus(status);
+    }
+
+    function getCursorPosition(value, selectionStart) {
+        const textBeforeCursor = value.slice(0, selectionStart);
+        const lines = textBeforeCursor.split("\n");
+        const currentLine = lines.length;
+        const currentColumn = Array.from(lines[lines.length - 1]).length + 1;
+
+        return {
+            line: currentLine,
+            col: currentColumn,
+        };
+    }
+
+    function updateCursorPositionFromElement(element) {
+        if (element === null) {
+            return;
+        }
+
+        const nextCursorPosition = getCursorPosition(element.value, element.selectionStart);
+
+        setCursorPosition((currentCursorPosition) => {
+            if (currentCursorPosition.line === nextCursorPosition.line && currentCursorPosition.col === nextCursorPosition.col) {
+                return currentCursorPosition;
+            }
+
+            return nextCursorPosition;
+        });
+    }
+
+    function updatePendingCount() {
+        setPendingCount(pendingOperations.current.length);
     }
 
     function connect(documentID, displayName) {
@@ -174,11 +210,11 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 clearTimeout(reconnectionTimeoutRef.current);
                 reconnectionTimeoutRef.current = null;
             }
-            websocket.current.onclose = null;
             if (websocket.current !== null) {
+                websocket.current.onclose = null;
                 websocket.current.close();
+                websocket.current = null;
             }
-            websocket.current = null;
         };
     }, []);
 
@@ -188,6 +224,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         }
 
         editorRef.current.setSelectionRange(pendingSelection.current.start, pendingSelection.current.end);
+        updateCursorPositionFromElement(editorRef.current);
 
         pendingSelection.current = null;
     }, [content]);
@@ -362,6 +399,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
         console.log("selectionEnd: ", event.currentTarget.selectionEnd);
         console.log("data: ", event.nativeEvent.data);
         console.log("value: ", event.currentTarget.value);
+        updateCursorPositionFromElement(event.currentTarget);
     }
 
     function handleCompositionEnd(event) {
@@ -379,8 +417,13 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
 
         sendOrQueue(operationID, true);
         sendSnapshot();
+        updateCursorPositionFromElement(event.currentTarget);
 
         return operationID;
+    }
+
+    function handleCursorChange(event) {
+        updateCursorPositionFromElement(event.currentTarget);
     }
 
     function handleBeforeInput(event) {
@@ -443,6 +486,8 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 type: "delete"
             });
         }
+
+        updatePendingCount();
     }
 
     function flushPendingOperations() {
@@ -461,6 +506,7 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
                 websocket.current.send(jsonDelete);
             }
         }
+        updatePendingCount();
         sendSnapshot();
     }
 
@@ -502,10 +548,15 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     return {
         connectionStatus,
         content,
+        characterCount,
+        cursorCol: cursorPosition.col,
+        cursorLine: cursorPosition.line,
         document,
         websocket,
         pendingOperations,
+        pendingCount,
         users,
+        handleCursorChange,
         handleInput,
         handleCompositionEnd,
     };
