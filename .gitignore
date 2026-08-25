@@ -1,10 +1,10 @@
 # Database
-data/*
-!data/.gitkeep
+backend/data/*
+backend/!data/.gitkeep
 
 # Executables
-cmd/editor/*.exe
-cmd/relay/*.exe
+backend/cmd/editor/*.exe
+backend/cmd/relay/*.exe
 
 # Frontend
 frontend/node_modules/
