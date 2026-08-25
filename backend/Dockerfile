@@ -13,6 +13,10 @@ FROM alpine AS runtime
 
 WORKDIR /app
 
+ENV DATA_DIR=/app/data
+
+RUN mkdir -p /app/data
+
 COPY --from=builder /app/relay ./relay/
 CMD ["./relay/relay"]
 
