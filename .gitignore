@@ -1,6 +1,6 @@
 # Database
 backend/data/*
-backend/!data/.gitkeep
+!backend/data/.gitkeep
 
 # Executables
 backend/cmd/editor/*.exe
