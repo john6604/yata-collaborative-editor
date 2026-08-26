@@ -69,7 +69,11 @@ export function useCollaborativeDocument(documentID, displayName, editorRef) {
     function connect(documentID, displayName) {
 
         if (websocket.current === null || websocket.current.readyState === WebSocket.CLOSED) {
-            const ws = new WebSocket("ws://localhost:8181/ws");
+            const protocol = window.location.protocol === "https" ? "wss:" : "ws:";
+            const host = window.location.host;
+            const path = protocol + "//" + host + "/ws";
+            
+            const ws = new WebSocket(path);
             websocket.current = ws;
             updateConnectionStatus("connecting");
             ws.onopen = () => {

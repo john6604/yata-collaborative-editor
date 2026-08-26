@@ -168,7 +168,7 @@ function App() {
   
   const getDocuments = async() => {
     try {
-      const response = await fetch("http://localhost:8181/api/documents");
+      const response = await fetch("/api/documents");
 
       if (!response.ok) {
         throw new Error(`HTTP Error: ${response.status}`);
@@ -192,7 +192,7 @@ function App() {
 
   const createDocument = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:8181/api/documents", {
+      const response = await fetch("/api/documents", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -225,7 +225,7 @@ function App() {
 
   const renameDocument = useCallback(async (documentID, nextName) => {
     try {
-      const response = await fetch(`http://localhost:8181/api/documents/${documentID}`, {
+      const response = await fetch(`/api/documents/${documentID}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
