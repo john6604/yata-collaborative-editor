@@ -26,7 +26,7 @@ The relay server acts purely as a message forwarder that does not process, integ
 ## Visual Demo
 
 <p align="center">
-  <video src="./assets/CRDT.mp4" width="800" autoplay loop muted>
+  <video src="https://github.com/user-attachments/assets/de1daf19-ef7f-45d5-a531-a9552510a61b" width="800" autoplay loop muted>
   </video>
 </p>
 
