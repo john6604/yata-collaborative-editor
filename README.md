@@ -1,7 +1,25 @@
 # YATA CRDT Collaborative Text Editor
 
+![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 A real-time collaborative text editor where each client runs its own YATA algorithm instance, guaranteeing data convergence without central coordination. 
 The relay server acts purely as a message forwarder that does not process, integrate or delete data. 
+
+---
+
+## Table of Contents
+- [Architecture](#architecture)
+- [How it works](#how-it-works)
+- [Stack](#stack)
+- [How to run](#how-to-run)
+- [Communication Protocol](#communication-protocol)
+- [Design Decisions](#design-decisions)
+- [Limitations](#limitations)
+- [Future Work](#future-work)
+- [References](#references)
 
 ---
 
@@ -80,7 +98,6 @@ If your port `8080` is occupied the application will fail to start. Update the p
 
 ## Communication Protocol
 
-// Protocolo de comunicacion diseñado para el proyecto
 In order to allow communication between clients I have designed a specific message protocol that covers all operations within the application.
 
 ### Connection Envelope
@@ -258,7 +275,17 @@ Sent by the relay when a message cannot be processed.
 
 ## Design Decisions
 
+There have been many technical decisions that were specifically for this project. The most relevant are the following ones:
 
+1. YATA over RGA/LSEQ/Logoot: YATA was chosen due to its immutable origin. YATA is composed of three main elements: origin, right and left. Right and left reference the next and previous element respectively, those two references can change. On the other hand, origin is an immutable reference that allows the user to reconstruct the initial intention even if the local list has changed. Also, what distinguishes YATA from other algorithms is its property to combine origin with right references, which creates a right boundary. This is especially relevant because it allows to create a conflict zone to analyze concurrent operations easily. RGA was discarded because it does not have a right boundary, it only works with a reference to the previous element. LSEQ and Logoot were also discarded because they work with a specific identifier for each character, thus the amount of identifiers can grow indefinitely.
+
+2. Hybrid Synchronization: In my implementation the synchronization is possible with a specific vector. The vector is composed of a state vector that stores the maximum clock known by a client and a delete set that stores all lacking delete operations. This decision was taken because is the easiest way to send the operations that are lacking. Besides, it simplifies the design with less information to carry in the operation logs.
+
+3. Relay as Mailman: The relay server is just a forwarder that opens websocket connections. The main reason is that a CRDT implementation runs the logic on the client and the server just runs as a communication point. Also, the relay server caches a snapshot, this is because in the eventuality that no client is connected to send a snapshot to a new client, the relay server must send it. In this way, the new client will be able to work with a recent version.
+
+4. CRDT in browser: The initial decision was to run the CRDT in a `Go` process. I changed that design to run the CRDT directly in the browser. This eliminates the need for a `Go` process for each client and simplifies the maintenance of the application. I understand that there are certain trade-offs to this decision, such as a persistence that is not robust enough or the CRDT not surviving when closing the browser. The trade-offs were acceptable for the final goal of the project. However, the pure `Go` implementation is still available in the repository under the `/cmd/editor/` directory.
+
+5. Tiebreaker: When concurrent operations happen there must be a tiebreak to decide the order of insertion. In my design the tiebreaker is given by some conditions: i) it is known that each character has its origin, but the algorithm avoids that two characters origins cross; ii) if the condition is fulfilled, there is a tiebreaker. Firstly, the algorithm locates the conflicting zone, which is a small list with all characters  trying to be inserted concurrently. Then, the algorithm compares each client's clock, if the clock is the same the algorithm compares the generated ID. In this way, my implementation has two tiebreaks: clock and clientID, which is theoretically different from the original Nicolaescu's paper. This works because it is a deterministic and consistent rule that is followed by all replicas.
 
 ---
 
@@ -267,8 +294,11 @@ Sent by the relay when a message cannot be processed.
 There are certain known limitations within the application: 
 
 - Interleaving anomalies: There is the case where two clients insert an entire word concurrently. The application will follow the mathematical properties of YATA, which may affect the meaning of the words. The final state could be an unpredictable output, which is a known limitation of CRDTs algorithms in general. The computational logic cannot guarantee words with a real meaning. 
+
 - Tombstone accumulation: When a user deletes a character, the character gets deleted visually but maintains its logical CRDT structure. This is because other replicas could reference the deleted character for pending insert operations. The current mechanism is a logic deletion using a `bool` value to indicate which characters must be seen. This can lead to the accumulation of unseen characters and each operation that requires go through the entire list of characters can delay more and more as the garbage characters increase. The application currently does not have any garbage collection (GC) mechanism.
+
 - Single point of failure: The application starts with the relay server that serves on port 8181. If the relay server gets disconnected all of the clients will be disconnected, the operations will remain locally until the relay starts again and the clients can communicate normally.
+
 - Plain text only: The application does not support features such as bold, italic or underlined text. It only supports plain text and certain emojis.
 
 ---
@@ -278,12 +308,37 @@ There are certain known limitations within the application:
 There are certain implementations that could improve the project:
 
 - Horizontal Scaling: The current deployment runs a single relay instance. Future work could explore horizontal scaling across multiple relay instances, including the synchronization and coordination mechanisms required to preserve CRDT convergence across replicas. Kubernetes could then be used to orchestrate these instances, provide service discovery, and manage their lifecycle.
+
 - Observability: The system could expose metrics such as active WebSocket connections, document synchronization operations, update propagation latency, database activity, and error rates. Prometheus could be used for metrics collection, while Grafana could provide dashboards for monitoring the system under different workloads and network conditions.
+
 - Garbage Collection (GC): The current implementation does not provide a garbage-collection mechanism for obsolete CRDT metadata. Over long-running editing sessions, deleted characters and historical operations may cause the document state to grow continuously. Future work could investigate safe garbage-collection strategies that reduce storage and memory usage without compromising convergence or consistency.
+
 - Rich text: The current editor focuses on plain-text collaborative editing. Future versions could extend the CRDT model to represent formatting attributes such as bold text, italics, headings, lists, and other structured content. This introduces additional challenges because formatting operations must also converge consistently across concurrent edits.
+
 - Awareness Protocol: The current implementation synchronizes document content but does not maintain ephemeral collaboration state such as cursor position, text selection, or user presence. Future work could introduce an awareness protocol that propagates this transient information among connected clients without storing it as part of the persistent CRDT document state. This would allow users to visualize collaborators' cursors and selections in real time while keeping awareness data separate from the replicated document model.
 
 ---
 
 ## References
+
+### Papers
+
+1. Shapiro, M., Preguiça, N., Baquero, C., Zawirski, M. (2011). "A comprehensive study of Convergent and Commutative Replicated Data Types." INRIA Research Report.
+2. Nicolaescu, P., Jahns, K., Derntl, M., Klamma, R. (2016). "Yata — Yet Another Transformation Approach." CSCW.
+3. Kleppmann, M., Beresford, A. R. (2017). "A Conflict-Free Replicated JSON Datatype." IEEE Transactions on Parallel and Distributed Systems.
+4. Roh, H., Jeon, M., Kim, J., Lee, J. (2011). "Replicated abstract data types: Building blocks for collaborative applications." Journal of Parallel and Distributed Computing.
+
+### Books
+
+5. Kleppmann, M. (2017). "Designing Data-Intensive Applications." O'Reilly Media.
+
+### Talks
+
+6. Kleppmann, M. "CRDTs: The Hard Parts." YouTube.
+
+### Reference Implementations
+
+7. [Yjs](https://github.com/yjs/yjs) — Production CRDT text editing framework.
+8. [Automerge](https://github.com/automerge/automerge) — CRDT library for JSON documents.
+9. [cola](https://github.com/nomad/cola) — Minimal CRDT text implementation in Rust.
 
