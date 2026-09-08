@@ -36,7 +36,7 @@ The relay server acts purely as a message forwarder that does not process, integ
 
 Frontend is developed in `React + Vite` running the YATA engine directly in the browser. The relay server is developed in `Go` using websockets for bidirectional communication with the client, `BoltDB` is implemented as persistence for saving document's snapshots and `SQLite` used to store a document catalog.  
 
-// Image
+![CRDT Architecture](/assets/CRDT_Architecture.png)
 
 YATA runs directly on the browser which simplifies the deployment and eliminates the need for a `Go` process per client. The trade-offs are that local persistence is lost and CRDT may not survive if the browser is closed. 
 The relay does not execute convergence logic because it would turn the application into a server dependent system, which is specifically what CRDT does not need because the data convergence comes from its mathematical properties.
@@ -45,14 +45,13 @@ The relay does not execute convergence logic because it would turn the applicati
 
 ## How it works?
 
-// Image 1
-Normal edition starts with the user applying an operation. Once the operation is fully applied, it is sent through websocket to the other connected clients reaching the same final state. 
+- **Case 1:** Normal edition starts with the user applying an operation. Once the operation is fully applied, it is sent through websocket to the other connected clients reaching the same final state. 
 
-// Image 2
-When a client loses connection, the client can still edit the document. In parallel, other clients can send and receive operations. When the client finally reconnects, a state vector and a delete set are sent to the connected clients. The YATA algorithm computes what operations the recently reconnected client needs and send them. The client applies its pending operations and the mathematical property of CRDT is in charge of reaching the same state for every client. 
+- **Case 2:** When a client loses connection, the client can still edit the document. In parallel, other clients can send and receive operations. When the client finally reconnects, a state vector and a delete set are sent to the connected clients. The YATA algorithm computes what operations the recently reconnected client needs and send them. The client applies its pending operations and the mathematical property of CRDT is in charge of reaching the same state for every client. 
 
-// Image 3
-When a client connects for first time to a document, the other connected clients prepare a snapshot with the most recent information. The snapshot contains operations log and metadata, which allows the client to reconstruct the document applying the operations locally. . If no client is connected, the relay server has a stored snapshot ready to send to the new client. From that point, the new client can edit and send operations through websockets.
+- **Case 3:** When a client connects for first time to a document, the other connected clients prepare a snapshot with the most recent information. The snapshot contains operations log and metadata, which allows the client to reconstruct the document applying the operations locally. . If no client is connected, the relay server has a stored snapshot ready to send to the new client. From that point, the new client can edit and send operations through websockets.
+
+![CRDT Use Cases Diagram](/assets/CRDT_UseCases.png)
 
 ---
 
